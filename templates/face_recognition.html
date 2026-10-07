@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance - Face Recognition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0a1f44; --navy-2:#102a5c; --navy-3:#1d3f85; --accent:#3b82f6;
+  --ink:#0f1b33; --muted:#64748b; --line:#e2e8f0; --bg:#f4f7fb; --white:#fff;
+  --ok:#16a34a; --err:#dc2626;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+
+/* header */
+header{background:var(--navy);color:#fff;padding:18px 24px;position:relative;overflow:hidden}
+header::after{content:"";position:absolute;right:-80px;top:-120px;width:320px;height:320px;border-radius:50%;
+  background:radial-gradient(circle,rgba(59,130,246,.35),transparent 70%)}
+.bar{max-width:1120px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
+.brand{display:flex;align-items:center;gap:14px}
+.logo{width:44px;height:44px;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center}
+.brand h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.brand p{font-size:13px;color:#a9b8d8;margin-top:2px}
+.back{color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:9px 16px;border:1px solid rgba(255,255,255,.3);
+  border-radius:10px;transition:background .2s,border-color .2s}
+.back:hover{background:rgba(255,255,255,.12);border-color:#fff}
+
+/* layout */
+main{max-width:1120px;margin:0 auto;padding:36px 24px 56px;display:grid;grid-template-columns:1.15fr 1fr;gap:28px;align-items:start}
+@media(max-width:900px){main{grid-template-columns:1fr;padding:24px 16px 40px}}
+.card{background:var(--white);border-radius:20px;padding:26px;border:1px solid var(--line);box-shadow:0 18px 40px -22px rgba(10,31,68,.35)}
+.card h2{font-size:20px;font-weight:800;color:var(--navy)}
+.card .sub{font-size:14px;color:var(--muted);margin-top:4px}
+
+/* camera */
+.cam{position:relative;margin-top:20px;aspect-ratio:16/9;background:#050d1f;border-radius:16px;overflow:hidden}
+.cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.frame{position:absolute;inset:9%;pointer-events:none}
+.frame i{position:absolute;width:34px;height:34px;border:3px solid #fff;transition:border-color .3s,transform .3s}
+.frame i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-top-left-radius:12px}
+.frame i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-top-right-radius:12px}
+.frame i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-bottom-left-radius:12px}
+.frame i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:12px}
+.scan-line{position:absolute;left:0;right:0;height:2px;top:8%;background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  box-shadow:0 0 18px 4px rgba(59,130,246,.6);opacity:0;animation:scan 2.2s ease-in-out infinite}
+.cam.scanning .scan-line{opacity:1}
+.cam.scanning .frame i{border-color:var(--accent);animation:pulse 1s ease-in-out infinite}
+.cam:not(.scanning) .frame i{animation:breathe 3s ease-in-out infinite}
+@keyframes scan{0%,100%{top:8%}50%{top:90%}}
+@keyframes pulse{50%{transform:scale(1.08)}}
+@keyframes breathe{50%{transform:scale(.97)}}
+.status{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(10,31,68,.85);backdrop-filter:blur(6px);
+  color:#fff;padding:7px 16px;border-radius:999px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap}
+.status::before{content:"";width:8px;height:8px;border-radius:50%;background:#fbbf24;animation:blink 1.2s infinite}
+.status.ready::before{background:#22c55e;animation:none}
+.status.error::before{background:var(--err);animation:none}
+@keyframes blink{50%{opacity:.3}}
+
+button#scanBtn{margin-top:20px;width:100%;border:0;cursor:pointer;background:var(--navy);color:#fff;font:700 16px 'Manrope',sans-serif;
+  padding:15px;border-radius:12px;display:flex;justify-content:center;align-items:center;gap:10px;
+  transition:background .2s,transform .15s,box-shadow .2s}
+button#scanBtn:hover:not(:disabled){background:var(--navy-3);box-shadow:0 10px 22px -10px rgba(10,31,68,.7)}
+button#scanBtn:active:not(:disabled){transform:scale(.98)}
+button#scanBtn:disabled{background:#cbd5e1;cursor:not-allowed}
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+button#scanBtn.loading .spinner{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+#scanMessage{text-align:center;font-size:13px;color:var(--muted);margin-top:14px}
+
+/* results */
+.waiting{margin-top:24px;border:2px dashed #cbd5e1;border-radius:16px;padding:44px 20px;text-align:center}
+.avatar-ph{width:76px;height:76px;margin:0 auto 14px;border-radius:50%;background:#eaf0fb;color:var(--navy-3);display:grid;place-items:center;animation:float 3s ease-in-out infinite}
+@keyframes float{50%{transform:translateY(-6px)}}
+.waiting b{display:block;color:var(--navy);font-size:16px}
+.waiting span{font-size:13px;color:var(--muted)}
+.hidden{display:none!important}
+
+#result{margin-top:24px;animation:rise .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.who{background:var(--navy);color:#fff;border-radius:16px;padding:20px;display:flex;align-items:center;gap:16px}
+.tick{width:56px;height:56px;border-radius:50%;background:#fff;display:grid;place-items:center;flex:none}
+.tick svg{width:28px;height:28px;stroke:var(--ok);stroke-width:3.5;fill:none;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:30;stroke-dashoffset:30;animation:draw .5s .25s ease forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.who small{font-size:12px;color:#9fd0ff;font-weight:600}
+.who h3{font-size:21px;font-weight:800;margin-top:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.item{background:#f4f7fb;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.item p:first-child{font-size:12px;color:var(--muted);font-weight:600}
+.item p:last-child{font-size:16px;font-weight:700;color:var(--navy);margin-top:4px}
+.conf{margin-top:12px;background:#f4f7fb;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.conf .row{display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--muted)}
+.conf .row #confidence{color:var(--navy);font-size:14px;font-weight:800}
+.track{height:8px;background:#dbe4f3;border-radius:99px;margin-top:10px;overflow:hidden}
+#confBar{height:100%;width:0;background:linear-gradient(90deg,var(--navy-3),var(--accent));border-radius:99px;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+
+#errorBox{margin-top:24px;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid var(--err);border-radius:14px;padding:16px 18px;animation:shake .4s}
+#errorMessage{color:#b91c1c;font-weight:600;font-size:14px}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.scan-line{opacity:0!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="brand">
+      <div class="logo">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18c.8-2.4 2.9-3.5 5.5-3.5s4.7 1.1 5.5 3.5"/></svg>
+      </div>
+      <div>
+        <h1>Smart Attendance</h1>
+        <p>Face Recognition Attendance</p>
+      </div>
+    </div>
+    <a href="/representative" class="back">&larr; Dashboard</a>
+  </div>
+</header>
+
+<main>
+  <!-- CAMERA -->
+  <section class="card">
+    <h2>Scan Student</h2>
+    <p class="sub">Position one student in front of the camera.</p>
+
+    <div class="cam" id="cam">
+      <video id="video" autoplay playsinline muted></video>
+      <div class="frame">
+        <i></i><i></i><i></i><i></i>
+        <div class="scan-line" id="scanLine"></div>
+      </div>
+      <div id="cameraStatus" class="status">Starting camera...</div>
+    </div>
+
+    <button id="scanBtn" onclick="recognizeStudent()" disabled>
+      <span class="spinner"></span><span id="btnText">Scan Face</span>
+    </button>
+    <p id="scanMessage">Keep your face clearly visible.</p>
+  </section>
+
+  <!-- RESULT -->
+  <section class="card">
+    <h2>Recognition Result</h2>
+    <p class="sub">Student details will appear here.</p>
+
+    <div id="waiting" class="waiting">
+      <div class="avatar-ph">
+        <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>
+      </div>
+      <b>Waiting for scan</b>
+      <span>Click "Scan Face" to identify the student.</span>
+    </div>
+
+    <div id="result" class="hidden">
+      <div class="who">
+        <div class="tick"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <div>
+          <small>Face Recognized</small>
+          <h3 id="studentName">Student Name</h3>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="item"><p>Student ID</p><p id="studentId">-</p></div>
+        <div class="item"><p>Year</p><p id="studentYear">-</p></div>
+        <div class="item" style="grid-column:1/-1"><p>Department</p><p id="studentDepartment">-</p></div>
+      </div>
+      <div class="conf">
+        <div class="row"><span>Confidence</span><span id="confidence">-</span></div>
+        <div class="track"><div id="confBar"></div></div>
+      </div>
+    </div>
+
+    <div id="errorBox" class="hidden"><p id="errorMessage"></p></div>
+  </section>
+</main>
+
+<script>
+const video = document.getElementById("video");
+const cam = document.getElementById("cam");
+const cameraStatus = document.getElementById("cameraStatus");
+const scanBtn = document.getElementById("scanBtn");
+const btnText = document.getElementById("btnText");
+const scanMessage = document.getElementById("scanMessage");
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+      audio: false
+    });
+    video.srcObject = stream;
+    cameraStatus.textContent = "Camera Ready";
+    cameraStatus.classList.add("ready");
+    scanBtn.disabled = false;
+    scanMessage.textContent = "Camera ready. Look directly at the camera.";
+  } catch (error) {
+    console.error("CAMERA ERROR:", error);
+    cameraStatus.textContent = "Camera access denied";
+    cameraStatus.classList.add("error");
+    scanMessage.textContent = "Allow camera permission and refresh the page.";
+  }
+}
+
+function captureFrame() {
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+function setScanning(on) {
+  cam.classList.toggle("scanning", on);
+  scanBtn.classList.toggle("loading", on);
+  scanBtn.disabled = on;
+  btnText.textContent = on ? "Scanning..." : "Scan Face";
+}
+
+async function recognizeStudent() {
+  if (!video.videoWidth) { showError("Camera is not ready."); return; }
+
+  setScanning(true);
+  scanMessage.textContent = "Please keep your face still...";
+  hideError();
+
+  try {
+    const image = captureFrame();
+    const response = await fetch("/api/recognize_face", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: image })
+    });
+    const data = await response.json();
+    console.log("RECOGNITION RESPONSE:", data);
+
+    if (data.success === true && data.recognized === true) {
+      showStudent(data);
+    } else {
+      showError(data.message || "Face could not be recognized.");
+    }
+  } catch (error) {
+    console.error("RECOGNITION ERROR:", error);
+    showError("Unable to connect to server.");
+  }
+
+  setScanning(false);
+}
+
+function showStudent(data) {
+  const s = data.student;
+  document.getElementById("waiting").classList.add("hidden");
+  hideError();
+
+  // re-trigger the reveal animation on every new scan
+  const result = document.getElementById("result");
+  result.classList.add("hidden");
+  void result.offsetWidth;
+  result.classList.remove("hidden");
+
+  document.getElementById("studentName").textContent = s.name;
+  document.getElementById("studentId").textContent = s.student_id;
+  document.getElementById("studentYear").textContent = s.year;
+  document.getElementById("studentDepartment").textContent = s.department;
+
+  const conf = Number(data.confidence);
+  document.getElementById("confidence").textContent = conf.toFixed(1);
+  const bar = document.getElementById("confBar");
+  bar.style.width = "0";
+  // bar assumes confidence is 0-100; values of 0-1 are scaled up
+  requestAnimationFrame(() => {
+    bar.style.width = Math.min(100, conf <= 1 ? conf * 100 : conf) + "%";
+  });
+
+  if (data.attendance_message) {
+    scanMessage.textContent = data.attendance_message;
+  } else {
+    scanMessage.textContent = "Student successfully recognized.";
+  }
+}
+
+function showError(message) {
+  const box = document.getElementById("errorBox");
+  box.classList.remove("hidden");
+  box.style.animation = "none"; void box.offsetWidth; box.style.animation = "";
+  document.getElementById("errorMessage").textContent = message;
+  document.getElementById("result").classList.add("hidden");
+}
+
+function hideError() {
+  document.getElementById("errorBox").classList.add("hidden");
+}
+
+window.addEventListener("DOMContentLoaded", startCamera);
+</script>
+</body>
+</html>

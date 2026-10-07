@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance - Attendance Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0a1f44;--navy-2:#102a5c;--navy-3:#1d3f85;--blue:#1d6cf2;--blue-2:#0f56d0;--green:#15803d;--green-2:#166534;--red:#dc2626;--red-bg:#fff1f2;--ink:#0f1b33;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb;--tint:#eaf0fb;--card:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+button,input,select{font-family:inherit}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* top bar */
+.topbar{background:var(--navy);color:#fff;height:68px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 6px 20px -8px rgba(10,31,68,.5)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-icon{width:40px;height:40px;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:15px}
+.brand h1{font-size:18px;font-weight:800}.brand p{font-size:12px;color:#a9b8d8;margin-top:2px}
+.nav{display:flex;gap:10px}
+.nav a{text-decoration:none;color:#fff;border:1px solid rgba(255,255,255,.3);padding:8px 16px;border-radius:10px;font-weight:600;font-size:14px;transition:background .2s,border-color .2s;display:inline-flex;align-items:center;gap:8px}
+.nav a:hover{background:rgba(255,255,255,.12);border-color:#fff}
+
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 60px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:0 14px 34px -22px rgba(10,31,68,.5);animation:rise .6s both}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+.title{display:flex;align-items:center;gap:16px;margin-bottom:22px}
+.title-icon{width:52px;height:52px;border-radius:15px;background:linear-gradient(135deg,var(--blue),var(--navy-3));color:#fff;display:grid;place-items:center;box-shadow:0 10px 20px -8px rgba(29,108,242,.7);animation:float 3.5s ease-in-out infinite}
+.title-icon svg{width:26px;height:26px}
+@keyframes float{50%{transform:translateY(-4px)}}
+.title h2{font-size:24px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
+.title p{font-size:14px;color:var(--muted);margin-top:3px}
+
+/* filters */
+.filters{display:grid;grid-template-columns:1.6fr 1fr auto;gap:16px;align-items:end;background:linear-gradient(180deg,#f3f8ff,#eaf2ff);border:1px solid #d8e6fb;border-radius:16px;padding:18px}
+.field label{display:block;font-size:13px;font-weight:700;color:#41536f;margin-bottom:7px}
+.field select,.search input{width:100%;height:46px;border:1px solid #d5e0ee;border-radius:11px;padding:0 14px;font-size:14px;font-weight:500;background:#fff;color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
+.field select:focus,.search input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(29,108,242,.14)}
+
+.btn{position:relative;overflow:hidden;border:0;height:46px;padding:0 22px;border-radius:11px;font-weight:700;font-size:14px;color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:9px;white-space:nowrap;transition:transform .15s,box-shadow .25s,filter .2s}
+.btn:hover:not(:disabled){transform:translateY(-2px)}
+.btn:active:not(:disabled){transform:scale(.97)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:linear-gradient(135deg,#2a7bff,var(--blue-2));box-shadow:0 10px 22px -10px rgba(29,108,242,.8)}
+.btn.csv{background:linear-gradient(135deg,#1f9d57,var(--green-2));box-shadow:0 10px 22px -12px rgba(21,128,61,.8)}
+.btn.pdf{background:linear-gradient(135deg,#2a7bff,var(--blue-2));box-shadow:0 10px 22px -12px rgba(29,108,242,.8)}
+.btn .spin{display:none;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.btn.loading .spin{display:block}.btn.loading svg{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.45);transform:scale(0);animation:ripple .6s ease-out;pointer-events:none}
+@keyframes ripple{to{transform:scale(4);opacity:0}}
+
+/* results */
+#results{display:none}
+#results.show{display:block}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:22px}
+.stat{border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;align-items:center;gap:14px;background:#fff;animation:rise .55s both;animation-delay:calc(var(--n)*80ms);transition:transform .25s,box-shadow .25s}
+.stat:hover{transform:translateY(-4px);box-shadow:0 16px 30px -18px rgba(10,31,68,.55)}
+.stat-ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;flex:none}
+.stat-ic.b{background:#e6f0ff;color:var(--blue)}.stat-ic.g{background:#e8f8ef;color:var(--green)}.stat-ic.r{background:#ffecee;color:var(--red)}
+.stat small{display:block;font-size:12px;font-weight:600;color:var(--muted)}
+.stat b{display:block;font-size:26px;font-weight:800;color:var(--navy);margin-top:2px;font-variant-numeric:tabular-nums}
+.ring{width:46px;height:46px;flex:none}
+.ring circle{fill:none;stroke-width:5}
+.ring .bg{stroke:#e6eefb}
+.ring .fg{stroke:var(--blue);stroke-linecap:round;stroke-dasharray:113.1;stroke-dashoffset:113.1;transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dashoffset 1.2s cubic-bezier(.2,.8,.2,1),stroke .4s}
+
+.toolbar{display:flex;gap:18px;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;margin-top:24px}
+.search{flex:1;min-width:260px;max-width:460px;position:relative}
+.search label{display:block;font-size:13px;font-weight:700;color:#41536f;margin-bottom:7px}
+.search svg{position:absolute;left:14px;bottom:13px;color:#8a9ab3;width:18px;height:18px}
+.search input{padding-left:42px}
+.meta{display:flex;align-items:center;gap:12px;padding:0 4px}
+.meta svg{color:var(--navy-3);width:24px;height:24px}
+.meta small{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.meta b{font-size:14px;color:var(--navy);font-weight:800}
+.actions{display:flex;gap:12px}
+
+.seg{display:inline-flex;background:#eef3fb;border-radius:12px;padding:4px;margin-top:18px;position:relative}
+.seg button{border:0;background:transparent;padding:9px 18px;border-radius:9px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;position:relative;z-index:1;transition:color .2s}
+.seg button.on{color:#fff}
+.seg .pill{position:absolute;top:4px;bottom:4px;left:4px;border-radius:9px;background:var(--navy-2);transition:transform .3s cubic-bezier(.3,.9,.3,1),width .3s;box-shadow:0 6px 14px -6px rgba(10,31,68,.7)}
+
+.table-card{margin-top:14px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.table-scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+th{background:#eaf1fc;color:var(--navy);padding:14px 16px;font-weight:800;font-size:13px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;border-bottom:1px solid var(--line);transition:background .2s}
+th:hover{background:#dfeafb}
+th.l,td.l{text-align:left}
+th .arr{display:inline-block;margin-left:5px;opacity:.25;font-size:10px;transition:transform .25s,opacity .2s}
+th.sorted .arr{opacity:1;color:var(--blue)}
+th.sorted.desc .arr{transform:rotate(180deg)}
+td{padding:14px 16px;border-bottom:1px solid #edf1f6;text-align:center;font-weight:500;font-variant-numeric:tabular-nums}
+tbody tr{animation:rowIn .45s both;animation-delay:calc(var(--r)*35ms);transition:background .2s,box-shadow .2s}
+@keyframes rowIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+tbody tr:hover{background:#f3f7ff;box-shadow:inset 3px 0 0 var(--blue)}
+tbody tr.low{background:var(--red-bg)}
+tbody tr.low:hover{background:#ffe4e7;box-shadow:inset 3px 0 0 var(--red)}
+td.name{font-weight:700;color:var(--navy)}
+.pct{display:flex;align-items:center;gap:10px;justify-content:center;min-width:150px}
+.bar{flex:1;max-width:84px;height:7px;border-radius:99px;background:#e6edf8;overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#34d399,#16a34a);transition:width 1s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--r)*35ms + 200ms)}
+.bar i.mid{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.bar i.bad{background:linear-gradient(90deg,#fb7185,#dc2626)}
+.pct b{min-width:40px;text-align:right;font-weight:800}
+tr.low .pct b{color:var(--red)}
+.tag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;color:var(--red);background:#ffdfe3;border-radius:6px;padding:2px 6px;margin-left:8px;vertical-align:middle}
+
+.foot{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;font-size:13px;color:var(--muted);font-weight:600}
+.pager{display:flex;gap:6px;align-items:center}
+.pager button{min-width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--navy);font-weight:700;cursor:pointer;transition:all .2s}
+.pager button:hover:not(:disabled):not(.on){border-color:var(--blue);color:var(--blue);transform:translateY(-2px)}
+.pager button.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 8px 16px -8px rgba(29,108,242,.8)}
+.pager button:disabled{opacity:.4;cursor:not-allowed}
+
+/* states */
+.state{text-align:center;padding:56px 20px;color:var(--muted)}
+.state .ill{width:84px;height:84px;margin:0 auto 16px;border-radius:24px;background:var(--tint);color:var(--navy-3);display:grid;place-items:center;animation:float 3.5s ease-in-out infinite}
+.state .ill svg{width:38px;height:38px}
+.state h3{color:var(--navy);font-size:17px;margin-bottom:6px}
+.state p{font-size:14px}
+.skeleton{display:none;margin-top:22px}
+.skeleton.show{display:block}
+.sk{height:46px;border-radius:12px;margin-bottom:10px;background:linear-gradient(90deg,#eef3fb 25%,#f8fbff 50%,#eef3fb 75%);background-size:200% 100%;animation:shimmer 1.2s infinite}
+.sk.h{height:92px}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+.toast{position:fixed;right:24px;bottom:24px;min-width:260px;max-width:90vw;padding:15px 20px;background:var(--navy);color:#fff;border-radius:12px;border-left:4px solid #3b82f6;box-shadow:0 14px 34px rgba(0,0,0,.28);transform:translateY(100px);opacity:0;transition:.35s cubic-bezier(.2,.8,.2,1);z-index:2000;font-size:14px;font-weight:600}
+.toast.show{transform:none;opacity:1}.toast.err{border-left-color:#f87171}.toast.ok{border-left-color:#34d399}
+
+@media(max-width:900px){.filters{grid-template-columns:1fr 1fr}.filters .btn{grid-column:1/-1}.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.topbar{padding:0 16px}.brand p{display:none}.wrap{padding:18px 12px 50px}.panel{padding:16px}.filters{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.actions{width:100%}.actions .btn{flex:1}}
+@media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-report" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 17v-3M12 17v-6M15 17v-4"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 3v12M7 11l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.7a3.5 3.5 0 0 1 0 6.6M18 14.8c2 .7 3.2 2.5 3.7 5.2"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+</svg>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">SA</div>
+    <div><h1>Smart Attendance</h1><p>Admin Console</p></div>
+  </div>
+  <nav class="nav">
+    <a href="/admin"><svg class="i"><use href="#i-back"/></svg>Dashboard</a>
+    <a href="/logout">Logout</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <section class="panel">
+    <div class="title">
+      <div class="title-icon"><svg class="i"><use href="#i-report"/></svg></div>
+      <div>
+        <h2>Attendance Report</h2>
+        <p>Select Department and Year to generate and download the attendance report.</p>
+      </div>
+    </div>
+
+    <div class="filters">
+      <div class="field"><label for="dept">Department</label>
+        <select id="dept">
+          <option value="">Select Department</option>
+          <option value="CSE">Computer Science and Engineering (CSE)</option>
+          <option value="ECE">Electronics and Communication Engineering (ECE)</option>
+          <option value="EEE">Electrical and Electronics Engineering (EEE)</option>
+          <option value="MECH">Mechanical Engineering (MECH)</option>
+          <option value="CIVIL">Civil Engineering (CIVIL)</option>
+          <option value="MTZ">Mechatronics (MTZ)</option>
+        </select></div>
+      <div class="field"><label for="year">Year</label>
+        <select id="year">
+          <option value="">Select Year</option>
+          <option value="I">1st Year</option><option value="II">2nd Year</option>
+          <option value="III">3rd Year</option><option value="IV">4th Year</option>
+        </select></div>
+      <button class="btn primary" id="gen" type="button"><svg class="i"><use href="#i-dl"/></svg><span class="spin"></span><span>Generate Report</span></button>
+    </div>
+
+    <div class="skeleton" id="skeleton"><div class="sk h"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+
+    <div class="state" id="empty">
+      <div class="ill"><svg class="i"><use href="#i-report"/></svg></div>
+      <h3>No report generated yet</h3>
+      <p>Choose a department and year, then click <b>Generate Report</b>.</p>
+    </div>
+
+    <div id="results">
+      <div class="stats">
+        <div class="stat" style="--n:0"><div class="stat-ic b"><svg class="i"><use href="#i-users"/></svg></div><div><small>Total Students</small><b id="s-total">0</b></div></div>
+        <div class="stat" style="--n:1">
+          <svg class="ring" viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="18"/><circle class="fg" id="ring" cx="22" cy="22" r="18"/></svg>
+          <div><small>Class Average</small><b id="s-avg">0%</b></div></div>
+        <div class="stat" style="--n:2"><div class="stat-ic g"><svg class="i"><use href="#i-ok"/></svg></div><div><small>Eligible (75% and above)</small><b id="s-ok">0</b></div></div>
+        <div class="stat" style="--n:3"><div class="stat-ic r"><svg class="i"><use href="#i-warn"/></svg></div><div><small>Shortage (below 75%)</small><b id="s-low">0</b></div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="search">
+          <label for="q">Search Student</label>
+          <svg class="i"><use href="#i-search"/></svg>
+          <input id="q" type="text" placeholder="Search by name or register number..." autocomplete="off">
+        </div>
+        <div class="meta"><svg class="i"><use href="#i-cal"/></svg><div><small>Report Generated On</small><b id="gen-at">-</b></div></div>
+        <div class="actions">
+          <button class="btn csv" id="dl-csv" type="button"><svg class="i"><use href="#i-dl"/></svg><span>Download CSV</span></button>
+          <button class="btn pdf" id="dl-pdf" type="button"><svg class="i"><use href="#i-dl"/></svg><span>Download PDF</span></button>
+        </div>
+      </div>
+
+      <div class="seg" id="seg" role="tablist">
+        <span class="pill" id="pill"></span>
+        <button class="on" data-f="all" type="button">All</button>
+        <button data-f="low" type="button">Below 75%</button>
+        <button data-f="ok" type="button">75% and above</button>
+      </div>
+
+      <div class="table-card"><div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th data-k="sno" style="width:80px">S.No<span class="arr">▲</span></th>
+            <th data-k="name" class="l">Name<span class="arr">▲</span></th>
+            <th data-k="reg">Register No<span class="arr">▲</span></th>
+            <th data-k="pct">Attendance %<span class="arr">▲</span></th>
+            <th data-k="total">Total Hours<span class="arr">▲</span></th>
+            <th data-k="present">Present Hours<span class="arr">▲</span></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div></div>
+
+      <div class="state" id="no-match" style="display:none;padding:34px"><h3>No students found</h3><p>Try a different search or filter.</p></div>
+
+      <div class="foot"><span id="showing"></span><div class="pager" id="pager"></div></div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const THRESHOLD = 75, PAGE_SIZE = 10;
+  const YEAR_LABEL = {I:"1st Year", II:"2nd Year", III:"3rd Year", IV:"4th Year"};
+
+  const S = { rows: [], dept: "", year: "", filter: "all", q: "", sort: {k: "sno", dir: 1}, page: 1, generatedAt: null };
+
+  /* ---------- helpers ---------- */
+  let tt;
+  function toast(msg, type) {
+    const t = $("toast"); t.textContent = msg; t.className = "toast show " + (type || "");
+    clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 3200);
+  }
+  function fmtDate(d) {
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mon = d.toLocaleString("en-GB", {month: "short"});
+    let h = d.getHours(), ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+    return `${dd} ${mon} ${d.getFullYear()}, ${String(h).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} ${ap}`;
+  }
+  function countUp(el, to, suffix, ms) {
+    suffix = suffix || ""; ms = ms || 900;
+    const start = performance.now();
+    (function step(now) {
+      const p = Math.min((now - start) / ms, 1), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(to * e) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    })(start);
+  }
+  function deptLabel() { return $("dept").selectedOptions[0].textContent; }
+  function addRipple(e) {
+    const b = e.currentTarget, r = b.getBoundingClientRect(), s = document.createElement("span");
+    const size = Math.max(r.width, r.height);
+    s.className = "ripple"; s.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - r.left - size/2}px;top:${e.clientY - r.top - size/2}px`;
+    b.appendChild(s); setTimeout(() => s.remove(), 600);
+  }
+  document.querySelectorAll(".btn").forEach(b => b.addEventListener("click", addRipple));
+
+  /* ---------- generate ---------- */
+  $("gen").addEventListener("click", async () => {
+    const dept = $("dept").value, year = $("year").value;
+    if (!dept || !year) { toast("Please select both Department and Year.", "err"); return; }
+    const btn = $("gen");
+    btn.disabled = true; btn.classList.add("loading");
+    $("empty").style.display = "none"; $("results").classList.remove("show"); $("skeleton").classList.add("show");
+    try {
+      const res = await fetch(`/api/admin_attendance_report?department=${encodeURIComponent(dept)}&year=${encodeURIComponent(year)}`);
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.message || "Unable to generate report.");
+      S.rows = (data.students || []).map((r, i) => {
+        const total = +r.total_hours || 0, present = +r.present_hours || 0;
+        return { sno: i + 1, name: r.name || "", reg: String(r.student_id || ""), total, present,
+                 pct: total ? present * 100 / total : null };
+      });
+      S.dept = dept; S.year = year; S.filter = "all"; S.q = ""; S.page = 1; S.sort = {k: "sno", dir: 1};
+      S.generatedAt = new Date();
+      $("q").value = "";
+      $("gen-at").textContent = fmtDate(S.generatedAt);
+      $("skeleton").classList.remove("show");
+      if (!S.rows.length) {
+        $("empty").style.display = "block";
+        $("empty").querySelector("h3").textContent = "No students found";
+        $("empty").querySelector("p").textContent = "No students are registered for this department and year.";
+        return;
+      }
+      $("results").classList.add("show");
+      setSeg("all"); renderStats(); render();
+      toast(`Report generated for ${S.rows.length} students.`, "ok");
+    } catch (err) {
+      console.error(err);
+      $("skeleton").classList.remove("show"); $("empty").style.display = "block";
+      $("empty").querySelector("h3").textContent = "Could not generate report";
+      $("empty").querySelector("p").textContent = err.message;
+      toast(err.message, "err");
+    } finally { btn.disabled = false; btn.classList.remove("loading"); }
+  });
+
+  /* ---------- stats ---------- */
+  function renderStats() {
+    const withData = S.rows.filter(r => r.pct !== null);
+    const avg = withData.length ? withData.reduce((a, r) => a + r.pct, 0) / withData.length : 0;
+    const low = S.rows.filter(r => r.pct !== null && r.pct < THRESHOLD).length;
+    countUp($("s-total"), S.rows.length);
+    countUp($("s-avg"), Math.round(avg), "%");
+    countUp($("s-ok"), S.rows.length - low);
+    countUp($("s-low"), low);
+    const ring = $("ring");
+    ring.style.stroke = avg >= THRESHOLD ? "var(--blue)" : "var(--red)";
+    ring.style.strokeDashoffset = 113.1;
+    requestAnimationFrame(() => requestAnimationFrame(() => { ring.style.strokeDashoffset = 113.1 * (1 - avg / 100); }));
+  }
+
+  /* ---------- table ---------- */
+  function view() {
+    const q = S.q.trim().toLowerCase();
+    let rows = S.rows.filter(r => {
+      if (q && !(r.name.toLowerCase().includes(q) || r.reg.toLowerCase().includes(q))) return false;
+      const low = r.pct !== null && r.pct < THRESHOLD;
+      return S.filter === "all" || (S.filter === "low" ? low : !low);
+    });
+    const {k, dir} = S.sort;
+    rows.sort((a, b) => {
+      let x = a[k], y = b[k];
+      if (x === null) x = -1; if (y === null) y = -1;
+      return (typeof x === "string" ? x.localeCompare(y, undefined, {numeric: true}) : x - y) * dir;
+    });
+    return rows;
+  }
+  function render() {
+    const rows = view(), pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    if (S.page > pages) S.page = pages;
+    const from = (S.page - 1) * PAGE_SIZE, slice = rows.slice(from, from + PAGE_SIZE);
+    $("tbody").innerHTML = slice.map((r, i) => {
+      const low = r.pct !== null && r.pct < THRESHOLD;
+      const cls = r.pct === null ? "" : r.pct < THRESHOLD ? "bad" : r.pct < 85 ? "mid" : "";
+      const p = r.pct === null ? "N/A" : Math.round(r.pct) + "%";
+      return `<tr class="${low ? "low" : ""}" style="--r:${i}">
+        <td>${r.sno}</td><td class="l name">${esc(r.name)}${low ? '<span class="tag">LOW</span>' : ""}</td>
+        <td>${esc(r.reg)}</td>
+        <td><div class="pct"><div class="bar"><i class="${cls}" data-w="${r.pct ?? 0}"></i></div><b>${p}</b></div></td>
+        <td>${r.total}</td><td>${r.present}</td></tr>`;
+    }).join("");
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      document.querySelectorAll(".bar i").forEach(i => i.style.width = i.dataset.w + "%")));
+    $("no-match").style.display = rows.length ? "none" : "block";
+    $("showing").textContent = rows.length
+      ? `Showing ${from + 1} to ${from + slice.length} of ${rows.length} students` : "Showing 0 students";
+    document.querySelectorAll("th").forEach(th => {
+      th.classList.toggle("sorted", th.dataset.k === S.sort.k);
+      th.classList.toggle("desc", th.dataset.k === S.sort.k && S.sort.dir === -1);
+    });
+    renderPager(pages);
+  }
+  function renderPager(pages) {
+    const pg = $("pager"); pg.innerHTML = "";
+    const add = (label, page, opts) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+      if (opts && opts.disabled) b.disabled = true;
+      if (opts && opts.on) b.classList.add("on");
+      b.addEventListener("click", () => { S.page = page; render(); });
+      pg.appendChild(b);
+    };
+    add("‹", S.page - 1, {disabled: S.page === 1});
+    let start = Math.max(1, S.page - 2), end = Math.min(pages, start + 4); start = Math.max(1, end - 4);
+    for (let p = start; p <= end; p++) add(p, p, {on: p === S.page});
+    add("›", S.page + 1, {disabled: S.page === pages});
+  }
+
+  document.querySelectorAll("th").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.k;
+    S.sort = S.sort.k === k ? {k, dir: -S.sort.dir} : {k, dir: 1};
+    S.page = 1; render();
+  }));
+  $("q").addEventListener("input", e => { S.q = e.target.value; S.page = 1; render(); });
+
+  function setSeg(f) {
+    S.filter = f;
+    document.querySelectorAll("#seg button").forEach(b => {
+      const on = b.dataset.f === f; b.classList.toggle("on", on);
+      if (on) { const p = $("pill"); p.style.width = b.offsetWidth + "px"; p.style.transform = `translateX(${b.offsetLeft - 4}px)`; }
+    });
+  }
+  document.querySelectorAll("#seg button").forEach(b => b.addEventListener("click", () => { setSeg(b.dataset.f); S.page = 1; render(); }));
+  window.addEventListener("resize", () => S.rows.length && setSeg(S.filter));
+
+  /* ---------- downloads ---------- */
+  function fileBase() { return `Attendance_${S.dept}_${S.year}Year_${new Date().toISOString().slice(0, 10)}`; }
+  function save(blob, name) {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const csvCell = v => {
+    let s = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // block spreadsheet formula injection
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  $("dl-csv").addEventListener("click", () => {
+    if (!S.rows.length) return;
+    const lines = [["S.No","Name","Register No","Total Hours","Present Hours","Attendance %"].join(",")];
+    S.rows.forEach(r => lines.push([r.sno, r.name, r.reg, r.total, r.present, r.pct === null ? "N/A" : Math.round(r.pct) + "%"].map(csvCell).join(",")));
+    save(new Blob(["\ufeff" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"}), fileBase() + ".csv");
+    toast("CSV downloaded.", "ok");
+  });
+
+  $("dl-pdf").addEventListener("click", () => {
+    if (!S.rows.length) return;
+    if (!window.jspdf || !window.jspdf.jsPDF) { toast("PDF library could not load. Check your internet connection.", "err"); return; }
+    const doc = new window.jspdf.jsPDF({unit: "pt", format: "a4"});
+    const W = doc.internal.pageSize.getWidth(), M = 36;
+    const navy = [10, 31, 68], blue = [16, 78, 170];
+
+    doc.setFont("helvetica", "bold"); doc.setFontSize(24); doc.setTextColor(...navy);
+    doc.text("Attendance Report", W / 2, 56, {align: "center"});
+    doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(90, 105, 130);
+    doc.text("Date of Download:", W - M, 46, {align: "right"});
+    doc.setFont("helvetica", "bold"); doc.setTextColor(...navy);
+    doc.text(fmtDate(new Date()), W - M, 59, {align: "right"});
+    doc.setDrawColor(...blue); doc.setLineWidth(1.5); doc.line(M, 74, W - M, 74);
+
+    doc.setFillColor(234, 243, 255); doc.setDrawColor(190, 214, 245); doc.setLineWidth(.8);
+    doc.roundedRect(M, 90, W - 2 * M, 54, 6, 6, "FD");
+    doc.setDrawColor(190, 214, 245); doc.line(W * 0.66, 100, W * 0.66, 134);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90, 105, 130);
+    doc.text("Department", M + 16, 109); doc.text("Year", W * 0.66 + 16, 109);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...navy);
+    doc.text(deptLabel(), M + 16, 129); doc.text(YEAR_LABEL[S.year] || S.year, W * 0.66 + 16, 129);
+
+    const body = S.rows.map(r => [r.sno, r.name, r.reg, r.total, r.present, r.pct === null ? "N/A" : Math.round(r.pct) + "%"]);
+    doc.autoTable({
+      startY: 162, margin: {left: M, right: M, bottom: 40},
+      head: [["S.No", "Name", "Register No", "Total Hours", "Present Hours", "Attendance %"]], body,
+      theme: "grid",
+      styles: {font: "helvetica", fontSize: 10, cellPadding: 8, halign: "center", valign: "middle", textColor: navy, lineColor: [190, 214, 245], lineWidth: .5},
+      headStyles: {fillColor: blue, textColor: 255, fontStyle: "bold"},
+      columnStyles: {1: {halign: "left"}},
+      didParseCell(d) {
+        if (d.section !== "body") return;
+        const r = S.rows[d.row.index];
+        if (r.pct !== null && r.pct < THRESHOLD) {
+          d.cell.styles.fillColor = [255, 232, 236];
+          if (d.column.index === 5) { d.cell.styles.textColor = [220, 38, 38]; d.cell.styles.fontStyle = "bold"; }
+        }
+      },
+      didDrawPage() {
+        const n = doc.internal.getNumberOfPages(), H = doc.internal.pageSize.getHeight();
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(120, 135, 160);
+        doc.text("Smart Attendance System", M, H - 20);
+        doc.text("Page " + doc.internal.getCurrentPageInfo().pageNumber, W - M, H - 20, {align: "right"});
+      }
+    });
+    doc.save(fileBase() + ".pdf");
+    toast("PDF downloaded.", "ok");
+  });
+})();
+</script>
+</body>
+</html>

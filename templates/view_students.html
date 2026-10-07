@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>View Students — Smart Attendance</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+
+        :root {
+            --ink: #1B2B22;
+            --paper: #F7F4EC;
+            --card: #FCFAF4;
+            --moss: #3D5A45;
+            --moss-dark: #2C4433;
+            --gold: #B8863E;
+            --line: #DCD5C4;
+            --muted: #6B6558;
+            --danger: #A6473B;
+            --white: #FFFFFF;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: 'Inter', sans-serif;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: 'Source Serif 4', Georgia, serif;
+        }
+
+        .shell {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 42px 28px 60px;
+        }
+
+        /* HEADER */
+
+        .topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 20px;
+
+            margin-bottom: 28px;
+            padding-bottom: 22px;
+
+            border-bottom: 1px solid var(--line);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-mark {
+            width: 42px;
+            height: 42px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border: 1px solid var(--gold);
+            background: var(--card);
+
+            color: var(--moss-dark);
+
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 19px;
+            font-weight: 600;
+        }
+
+        .brand-text strong {
+            display: block;
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        .brand-text span {
+            display: block;
+            margin-top: 3px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .back-btn {
+            border: 1px solid var(--line);
+            background: var(--card);
+            color: var(--moss-dark);
+
+            padding: 10px 15px;
+
+            cursor: pointer;
+
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .back-btn:hover {
+            border-color: var(--moss);
+            background: var(--white);
+        }
+
+        /* TITLE */
+
+        .page-title {
+            margin-bottom: 22px;
+        }
+
+        .page-title h1 {
+            margin: 0 0 6px;
+            font-size: 34px;
+        }
+
+        .page-title p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--muted);
+        }
+
+        /* SUMMARY */
+
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+
+            margin-bottom: 22px;
+        }
+
+        .summary-card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            padding: 20px;
+        }
+
+        .summary-label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 7px;
+        }
+
+        .summary-number {
+            font-family: 'Source Serif 4', Georgia, serif;
+            font-size: 30px;
+            font-weight: 600;
+            color: var(--moss-dark);
+        }
+
+        /* FILTERS */
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 180px 220px;
+            gap: 12px;
+
+            margin-bottom: 18px;
+        }
+
+        .input,
+        .select {
+            width: 100%;
+
+            padding: 12px 13px;
+
+            border: 1px solid var(--line);
+
+            background: var(--card);
+            color: var(--ink);
+
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+
+            outline: none;
+        }
+
+        .input:focus,
+        .select:focus {
+            border-color: var(--moss);
+        }
+
+        /* TABLE */
+
+        .table-card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            padding: 17px 18px;
+
+            border-bottom: 1px solid var(--line);
+        }
+
+        .table-header strong {
+            font-size: 14px;
+        }
+
+        .showing {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 850px;
+        }
+
+        th {
+            padding: 13px 15px;
+
+            text-align: left;
+
+            font-size: 11px;
+            font-weight: 700;
+
+            letter-spacing: .04em;
+            text-transform: uppercase;
+
+            color: var(--muted);
+
+            background: #F4F0E6;
+
+            border-bottom: 1px solid var(--line);
+        }
+
+        td {
+            padding: 14px 15px;
+
+            font-size: 13px;
+
+            border-bottom: 1px solid var(--line);
+        }
+
+        tbody tr {
+            transition: background .12s ease;
+        }
+
+        tbody tr:hover {
+            background: #F8F5ED;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .student-id {
+            font-weight: 700;
+            color: var(--moss-dark);
+        }
+
+        .student-name {
+            font-weight: 600;
+        }
+
+        .username {
+            color: var(--muted);
+        }
+
+        .year-badge,
+        .dept-badge {
+            display: inline-block;
+
+            padding: 5px 8px;
+
+            border: 1px solid var(--line);
+
+            background: var(--paper);
+
+            font-size: 11px;
+
+            white-space: nowrap;
+        }
+
+        /* ACTIONS */
+
+        .actions-cell {
+            display: flex;
+            gap: 7px;
+        }
+
+        .btn {
+            border: 1px solid var(--line);
+
+            background: var(--paper);
+
+            padding: 7px 10px;
+
+            cursor: pointer;
+
+            font-family: 'Inter', sans-serif;
+
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .btn-edit {
+            color: var(--moss-dark);
+        }
+
+        .btn-edit:hover {
+            border-color: var(--moss);
+            background: var(--white);
+        }
+
+        .btn-delete {
+            color: var(--danger);
+        }
+
+        .btn-delete:hover {
+            border-color: var(--danger);
+            background: var(--white);
+        }
+
+        /* EMPTY */
+
+        .empty {
+            display: none;
+            text-align: center;
+            padding: 55px 20px;
+            color: var(--muted);
+        }
+
+        .empty-icon {
+            font-size: 30px;
+            margin-bottom: 10px;
+        }
+
+        .empty strong {
+            display: block;
+            color: var(--ink);
+            margin-bottom: 5px;
+        }
+
+        /* MODAL */
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+
+            display: none;
+
+            align-items: center;
+            justify-content: center;
+
+            padding: 20px;
+
+            background: rgba(27, 43, 34, .48);
+
+            z-index: 1000;
+        }
+
+        .overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            width: 100%;
+            max-width: 520px;
+
+            background: var(--card);
+
+            border: 1px solid var(--line);
+
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .18);
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .modal-header h2 {
+            margin: 0 0 5px;
+            font-size: 23px;
+        }
+
+        .modal-header p {
+            margin: 0;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+
+            margin-bottom: 6px;
+
+            font-size: 12px;
+            font-weight: 600;
+
+            color: var(--muted);
+        }
+
+        .form-control {
+            width: 100%;
+
+            padding: 11px 12px;
+
+            border: 1px solid var(--line);
+
+            background: var(--white);
+            color: var(--ink);
+
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+
+            outline: none;
+        }
+
+        .form-control:focus {
+            border-color: var(--moss);
+        }
+
+        .form-control:disabled {
+            background: #F1EDE2;
+            color: var(--muted);
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+
+            gap: 9px;
+
+            padding: 16px 20px;
+
+            border-top: 1px solid var(--line);
+        }
+
+        .modal-btn {
+            padding: 10px 15px;
+
+            border: 1px solid var(--line);
+
+            background: var(--paper);
+
+            cursor: pointer;
+
+            font-family: 'Inter', sans-serif;
+
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .modal-btn.cancel:hover {
+            border-color: var(--moss);
+        }
+
+        .modal-btn.save {
+            color: white;
+            background: var(--moss);
+            border-color: var(--moss);
+        }
+
+        .modal-btn.save:hover {
+            background: var(--moss-dark);
+        }
+
+        .modal-btn.danger {
+            color: white;
+            background: var(--danger);
+            border-color: var(--danger);
+        }
+
+        .delete-message {
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--ink);
+        }
+
+        .delete-message strong {
+            color: var(--danger);
+        }
+
+        /* TOAST */
+
+        .toast {
+            position: fixed;
+
+            right: 22px;
+            bottom: 22px;
+
+            max-width: 350px;
+
+            padding: 13px 16px;
+
+            background: var(--moss-dark);
+            color: white;
+
+            font-size: 13px;
+
+            opacity: 0;
+            transform: translateY(12px);
+
+            pointer-events: none;
+
+            transition: .2s ease;
+
+            z-index: 2000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* LOADING */
+
+        .loading {
+            text-align: center;
+            padding: 45px 20px;
+            color: var(--muted);
+        }
+
+        /* RESPONSIVE */
+
+        @media (max-width: 800px) {
+
+            .summary {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+            .shell {
+                padding: 30px 18px 45px;
+            }
+
+            .page-title h1 {
+                font-size: 29px;
+            }
+        }
+
+    </style>
+</head>
+
+
+<body>
+
+<div class="shell">
+
+    <!-- HEADER -->
+
+    <header class="topbar">
+
+        <div class="brand">
+
+            <div class="brand-mark">
+                A
+            </div>
+
+            <div class="brand-text">
+
+                <strong>
+                    Admin console
+                </strong>
+
+                <span>
+                    Smart Attendance · Student Management
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <button
+            class="back-btn"
+            id="backBtn">
+
+            ← Back to dashboard
+
+        </button>
+
+    </header>
+
+
+    <!-- TITLE -->
+
+    <section class="page-title">
+
+        <h1>
+            View Students
+        </h1>
+
+        <p>
+            Browse, search, edit and manage enrolled student records.
+        </p>
+
+    </section>
+
+
+    <!-- SUMMARY -->
+
+    <section class="summary">
+
+        <div class="summary-card">
+
+            <div class="summary-label">
+                Total students
+            </div>
+
+            <div
+                class="summary-number"
+                id="totalCount">
+
+                0
+
+            </div>
+
+        </div>
+
+
+        <div class="summary-card">
+
+            <div class="summary-label">
+                Currently showing
+            </div>
+
+            <div
+                class="summary-number"
+                id="showingCount">
+
+                0
+
+            </div>
+
+        </div>
+
+
+        <div class="summary-card">
+
+            <div class="summary-label">
+                Status
+            </div>
+
+            <div
+                class="summary-number"
+                style="font-size:22px;">
+
+                Enrolled
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- FILTERS -->
+
+    <section class="controls">
+
+        <input
+            type="text"
+            id="searchInput"
+            class="input"
+            placeholder="Search student ID, name or username...">
+
+
+        <select
+            id="yearFilter"
+            class="select">
+
+            <option value="">
+                All Years
+            </option>
+
+            <option value="1st Year">
+                1st Year
+            </option>
+
+            <option value="2nd Year">
+                2nd Year
+            </option>
+
+            <option value="3rd Year">
+                3rd Year
+            </option>
+
+            <option value="4th Year">
+                4th Year
+            </option>
+
+        </select>
+
+
+        <select
+            id="deptFilter"
+            class="select">
+
+            <option value="">
+                All Departments
+            </option>
+
+        </select>
+
+    </section>
+
+
+    <!-- TABLE -->
+
+    <section class="table-card">
+
+        <div class="table-header">
+
+            <strong>
+                Student records
+            </strong>
+
+            <span
+                class="showing"
+                id="showingText">
+
+                Loading students...
+
+            </span>
+
+        </div>
+
+
+        <div class="table-wrap">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Student ID
+                        </th>
+
+                        <th>
+                            Name
+                        </th>
+
+                        <th>
+                            Username
+                        </th>
+
+                        <th>
+                            Year
+                        </th>
+
+                        <th>
+                            Department
+                        </th>
+
+                        <th>
+                            Actions
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="tableBody">
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+        <div
+            class="loading"
+            id="loadingState">
+
+            Loading student records...
+
+        </div>
+
+
+        <div
+            class="empty"
+            id="emptyState">
+
+            <div class="empty-icon">
+                🔎
+            </div>
+
+            <strong>
+                No students found
+            </strong>
+
+            <span>
+                Try changing your search or filters.
+            </span>
+
+        </div>
+
+    </section>
+
+</div>
+
+
+<!-- EDIT MODAL -->
+
+<div
+    class="overlay"
+    id="editOverlay">
+
+    <div class="modal">
+
+        <div class="modal-header">
+
+            <h2>
+                Edit Student
+            </h2>
+
+            <p>
+                Update the student's details.
+            </p>
+
+        </div>
+
+
+        <div class="modal-body">
+
+            <input
+                type="hidden"
+                id="editDatabaseId">
+
+
+            <div class="form-group">
+
+                <label>
+                    Student ID
+                </label>
+
+                <input
+                    type="text"
+                    id="editStudentId"
+                    class="form-control"
+                    disabled>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Name
+                </label>
+
+                <input
+                    type="text"
+                    id="editName"
+                    class="form-control">
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Username
+                </label>
+
+                <input
+                    type="text"
+                    id="editUsername"
+                    class="form-control">
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Year
+                </label>
+
+                <select
+                    id="editYear"
+                    class="form-control">
+
+                    <option value="1st Year">
+                        1st Year
+                    </option>
+
+                    <option value="2nd Year">
+                        2nd Year
+                    </option>
+
+                    <option value="3rd Year">
+                        3rd Year
+                    </option>
+
+                    <option value="4th Year">
+                        4th Year
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Department
+                </label>
+
+                <input
+                    type="text"
+                    id="editDepartment"
+                    class="form-control">
+
+            </div>
+
+        </div>
+
+
+        <div class="modal-footer">
+
+            <button
+                class="modal-btn cancel"
+                id="cancelEditBtn">
+
+                Cancel
+
+            </button>
+
+
+            <button
+                class="modal-btn save"
+                id="saveEditBtn">
+
+                Save changes
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- DELETE MODAL -->
+
+<div
+    class="overlay"
+    id="deleteOverlay">
+
+    <div class="modal">
+
+        <div class="modal-header">
+
+            <h2>
+                Delete Student
+            </h2>
+
+            <p>
+                This action cannot be undone.
+            </p>
+
+        </div>
+
+
+        <div class="modal-body">
+
+            <input
+                type="hidden"
+                id="deleteDatabaseId">
+
+
+            <p class="delete-message">
+
+                Are you sure you want to delete
+
+                <strong id="deleteStudentName">
+                    this student
+                </strong>?
+
+                <br>
+                <br>
+
+                The student's record and student login account
+                will also be deleted.
+
+            </p>
+
+        </div>
+
+
+        <div class="modal-footer">
+
+            <button
+                class="modal-btn cancel"
+                id="cancelDeleteBtn">
+
+                Cancel
+
+            </button>
+
+
+            <button
+                class="modal-btn danger"
+                id="confirmDeleteBtn">
+
+                Delete student
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- TOAST -->
+
+<div
+    class="toast"
+    id="toast">
+
+</div>
+
+
+<script>
+
+    /* =========================================================
+       ELEMENTS
+       ========================================================= */
+
+    const searchInput =
+        document.getElementById("searchInput");
+
+    const yearFilter =
+        document.getElementById("yearFilter");
+
+    const deptFilter =
+        document.getElementById("deptFilter");
+
+    const tableBody =
+        document.getElementById("tableBody");
+
+    const totalCount =
+        document.getElementById("totalCount");
+
+    const showingCount =
+        document.getElementById("showingCount");
+
+    const showingText =
+        document.getElementById("showingText");
+
+    const loadingState =
+        document.getElementById("loadingState");
+
+    const emptyState =
+        document.getElementById("emptyState");
+
+    const editOverlay =
+        document.getElementById("editOverlay");
+
+    const deleteOverlay =
+        document.getElementById("deleteOverlay");
+
+    const toast =
+        document.getElementById("toast");
+
+    const editDatabaseId =
+        document.getElementById("editDatabaseId");
+
+    const editStudentId =
+        document.getElementById("editStudentId");
+
+    const editName =
+        document.getElementById("editName");
+
+    const editUsername =
+        document.getElementById("editUsername");
+
+    const editYear =
+        document.getElementById("editYear");
+
+    const editDepartment =
+        document.getElementById("editDepartment");
+
+    const deleteDatabaseId =
+        document.getElementById("deleteDatabaseId");
+
+    const deleteStudentName =
+        document.getElementById("deleteStudentName");
+
+
+    /* =========================================================
+       LOCAL STUDENT ARRAY
+       ========================================================= */
+
+    let students = [];
+
+
+    /* =========================================================
+       LOAD STUDENTS FROM FLASK API
+       ========================================================= */
+
+    async function loadStudents() {
+
+        try {
+
+            loadingState.style.display = "block";
+            emptyState.style.display = "none";
+
+            const response =
+                await fetch("/api/students");
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    "Failed to load students."
+                );
+
+            }
+
+
+            const data =
+                await response.json();
+
+
+            if (!Array.isArray(data)) {
+
+                throw new Error(
+                    data.message || "Invalid student data."
+                );
+
+            }
+
+
+            students = data;
+
+
+            totalCount.textContent =
+                students.length;
+
+
+            createDepartmentOptions();
+
+            renderStudents();
+
+
+        } catch (error) {
+
+            console.error(
+                "LOAD STUDENTS ERROR:",
+                error
+            );
+
+
+            loadingState.style.display = "none";
+
+            tableBody.innerHTML = "";
+
+
+            showingText.textContent =
+                "Unable to load students";
+
+
+            alert(
+                "Could not load student records. Please make sure Flask is running and you are logged in as admin."
+            );
+
+        }
+
+    }
+
+
+    /* =========================================================
+       DEPARTMENT DROPDOWN
+       ========================================================= */
+
+    function createDepartmentOptions() {
+
+        deptFilter.innerHTML =
+            '<option value="">All Departments</option>';
+
+
+        const departments =
+            [...new Set(
+                students
+                    .map(student => student.department)
+                    .filter(Boolean)
+            )];
+
+
+        departments.sort();
+
+
+        departments.forEach(department => {
+
+            const option =
+                document.createElement("option");
+
+
+            option.value =
+                department;
+
+
+            option.textContent =
+                department;
+
+
+            deptFilter.appendChild(option);
+
+        });
+
+    }
+
+
+    /* =========================================================
+       RENDER STUDENTS
+       ========================================================= */
+
+    function renderStudents() {
+
+        const searchValue =
+            searchInput.value
+                .trim()
+                .toLowerCase();
+
+
+        const selectedYear =
+            yearFilter.value;
+
+
+        const selectedDepartment =
+            deptFilter.value;
+
+
+        const filteredStudents =
+            students.filter(student => {
+
+                const studentId =
+                    String(student.student_id || "")
+                        .toLowerCase();
+
+                const name =
+                    String(student.name || "")
+                        .toLowerCase();
+
+                const username =
+                    String(student.username || "")
+                        .toLowerCase();
+
+                const year =
+                    String(student.year || "");
+
+                const department =
+                    String(student.department || "");
+
+
+                const matchesSearch =
+                    !searchValue ||
+                    studentId.includes(searchValue) ||
+                    name.includes(searchValue) ||
+                    username.includes(searchValue);
+
+
+                const matchesYear =
+                    !selectedYear ||
+                    year === selectedYear;
+
+
+                const matchesDepartment =
+                    !selectedDepartment ||
+                    department === selectedDepartment;
+
+
+                return (
+                    matchesSearch &&
+                    matchesYear &&
+                    matchesDepartment
+                );
+
+            });
+
+
+        tableBody.innerHTML = "";
+
+
+        filteredStudents.forEach(student => {
+
+            const row =
+                document.createElement("tr");
+
+
+            /* Student ID */
+
+            const idCell =
+                document.createElement("td");
+
+            const idSpan =
+                document.createElement("span");
+
+            idSpan.className =
+                "student-id";
+
+            idSpan.textContent =
+                student.student_id;
+
+            idCell.appendChild(idSpan);
+
+
+            /* Name */
+
+            const nameCell =
+                document.createElement("td");
+
+            const nameSpan =
+                document.createElement("span");
+
+            nameSpan.className =
+                "student-name";
+
+            nameSpan.textContent =
+                student.name;
+
+            nameCell.appendChild(nameSpan);
+
+
+            /* Username */
+
+            const usernameCell =
+                document.createElement("td");
+
+            const usernameSpan =
+                document.createElement("span");
+
+            usernameSpan.className =
+                "username";
+
+            usernameSpan.textContent =
+                student.username;
+
+            usernameCell.appendChild(usernameSpan);
+
+
+            /* Year */
+
+            const yearCell =
+                document.createElement("td");
+
+            const yearSpan =
+                document.createElement("span");
+
+            yearSpan.className =
+                "year-badge";
+
+            yearSpan.textContent =
+                student.year;
+
+            yearCell.appendChild(yearSpan);
+
+
+            /* Department */
+
+            const departmentCell =
+                document.createElement("td");
+
+            const departmentSpan =
+                document.createElement("span");
+
+            departmentSpan.className =
+                "dept-badge";
+
+            departmentSpan.textContent =
+                student.department;
+
+            departmentCell.appendChild(departmentSpan);
+
+
+            /* Actions */
+
+            const actionsCell =
+                document.createElement("td");
+
+            const actions =
+                document.createElement("div");
+
+            actions.className =
+                "actions-cell";
+
+
+            /* Edit button */
+
+            const editButton =
+                document.createElement("button");
+
+            editButton.className =
+                "btn btn-edit";
+
+            editButton.textContent =
+                "Edit";
+
+
+            editButton.addEventListener(
+                "click",
+                function () {
+
+                    openEditModal(student);
+
+                }
+            );
+
+
+            /* Delete button */
+
+            const deleteButton =
+                document.createElement("button");
+
+            deleteButton.className =
+                "btn btn-delete";
+
+            deleteButton.textContent =
+                "Delete";
+
+
+            deleteButton.addEventListener(
+                "click",
+                function () {
+
+                    openDeleteModal(student);
+
+                }
+            );
+
+
+            actions.appendChild(editButton);
+            actions.appendChild(deleteButton);
+
+            actionsCell.appendChild(actions);
+
+
+            /* Add cells */
+
+            row.appendChild(idCell);
+            row.appendChild(nameCell);
+            row.appendChild(usernameCell);
+            row.appendChild(yearCell);
+            row.appendChild(departmentCell);
+            row.appendChild(actionsCell);
+
+
+            tableBody.appendChild(row);
+
+        });
+
+
+        loadingState.style.display =
+            "none";
+
+
+        showingCount.textContent =
+            filteredStudents.length;
+
+
+        showingText.textContent =
+            "Showing " +
+            filteredStudents.length +
+            " student" +
+            (filteredStudents.length === 1 ? "" : "s");
+
+
+        if (filteredStudents.length === 0) {
+
+            emptyState.style.display =
+                "block";
+
+        } else {
+
+            emptyState.style.display =
+                "none";
+
+        }
+
+    }
+
+
+    /* =========================================================
+       EDIT MODAL
+       ========================================================= */
+
+    function openEditModal(student) {
+
+        editDatabaseId.value =
+            student.id;
+
+        editStudentId.value =
+            student.student_id;
+
+        editName.value =
+            student.name;
+
+        editUsername.value =
+            student.username;
+
+        editYear.value =
+            student.year;
+
+        editDepartment.value =
+            student.department;
+
+
+        editOverlay.classList.add("show");
+
+    }
+
+
+    function closeEditModal() {
+
+        editOverlay.classList.remove("show");
+
+    }
+
+
+    /* =========================================================
+       SAVE EDIT
+       ========================================================= */
+
+    async function saveEdit() {
+
+        const saveButton =
+            document.getElementById("saveEditBtn");
+
+
+        const id =
+            editDatabaseId.value;
+
+        const name =
+            editName.value.trim();
+
+        const username =
+            editUsername.value.trim();
+
+        const year =
+            editYear.value;
+
+        const department =
+            editDepartment.value.trim();
+
+
+        if (
+            !name ||
+            !username ||
+            !year ||
+            !department
+        ) {
+
+            alert(
+                "Please fill all fields."
+            );
+
+            return;
+
+        }
+
+
+        saveButton.disabled =
+            true;
+
+        saveButton.textContent =
+            "Saving...";
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/update_student",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+
+                            id: id,
+
+                            name: name,
+
+                            username: username,
+
+                            year: year,
+
+                            department: department
+
+                        })
+
+                    }
+                );
+
+
+            const result =
+                await response.json();
+
+
+            if (!response.ok || !result.success) {
+
+                throw new Error(
+                    result.message ||
+                    "Could not update student."
+                );
+
+            }
+
+
+            closeEditModal();
+
+
+            showToast(
+                result.message ||
+                "Student updated successfully."
+            );
+
+
+            await loadStudents();
+
+
+        } catch (error) {
+
+            console.error(
+                "UPDATE ERROR:",
+                error
+            );
+
+
+            alert(
+                error.message ||
+                "Could not update student."
+            );
+
+        } finally {
+
+            saveButton.disabled =
+                false;
+
+            saveButton.textContent =
+                "Save changes";
+
+        }
+
+    }
+
+
+    /* =========================================================
+       DELETE MODAL
+       ========================================================= */
+
+    function openDeleteModal(student) {
+
+        deleteDatabaseId.value =
+            student.id;
+
+        deleteStudentName.textContent =
+            student.name;
+
+        deleteOverlay.classList.add("show");
+
+    }
+
+
+    function closeDeleteModal() {
+
+        deleteOverlay.classList.remove("show");
+
+    }
+
+
+    /* =========================================================
+       DELETE STUDENT
+       ========================================================= */
+
+    async function confirmDelete() {
+
+        const deleteButton =
+            document.getElementById(
+                "confirmDeleteBtn"
+            );
+
+
+        const id =
+            deleteDatabaseId.value;
+
+
+        if (!id) {
+
+            alert(
+                "Student ID is missing."
+            );
+
+            return;
+
+        }
+
+
+        deleteButton.disabled =
+            true;
+
+        deleteButton.textContent =
+            "Deleting...";
+
+
+        try {
+
+            const response =
+                await fetch(
+                    "/delete_student",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+                            id: id
+                        })
+
+                    }
+                );
+
+
+            const result =
+                await response.json();
+
+
+            if (!response.ok || !result.success) {
+
+                throw new Error(
+                    result.message ||
+                    "Could not delete student."
+                );
+
+            }
+
+
+            closeDeleteModal();
+
+
+            showToast(
+                result.message ||
+                "Student deleted successfully."
+            );
+
+
+            await loadStudents();
+
+
+        } catch (error) {
+
+            console.error(
+                "DELETE ERROR:",
+                error
+            );
+
+
+            alert(
+                error.message ||
+                "Could not delete student."
+            );
+
+        } finally {
+
+            deleteButton.disabled =
+                false;
+
+            deleteButton.textContent =
+                "Delete student";
+
+        }
+
+    }
+
+
+    /* =========================================================
+       TOAST
+       ========================================================= */
+
+    function showToast(message) {
+
+        toast.textContent =
+            message;
+
+        toast.classList.add("show");
+
+
+        setTimeout(
+            function () {
+
+                toast.classList.remove("show");
+
+            },
+            2500
+        );
+
+    }
+
+
+    /* =========================================================
+       BUTTON EVENTS
+       ========================================================= */
+
+    document
+        .getElementById("backBtn")
+        .addEventListener(
+            "click",
+            function () {
+
+                window.location.href =
+                    "/admin";
+
+            }
+        );
+
+
+    document
+        .getElementById("cancelEditBtn")
+        .addEventListener(
+            "click",
+            closeEditModal
+        );
+
+
+    document
+        .getElementById("saveEditBtn")
+        .addEventListener(
+            "click",
+            saveEdit
+        );
+
+
+    document
+        .getElementById("cancelDeleteBtn")
+        .addEventListener(
+            "click",
+            closeDeleteModal
+        );
+
+
+    document
+        .getElementById("confirmDeleteBtn")
+        .addEventListener(
+            "click",
+            confirmDelete
+        );
+
+
+    /* =========================================================
+       FILTER EVENTS
+       ========================================================= */
+
+    searchInput.addEventListener(
+        "input",
+        renderStudents
+    );
+
+
+    yearFilter.addEventListener(
+        "change",
+        renderStudents
+    );
+
+
+    deptFilter.addEventListener(
+        "change",
+        renderStudents
+    );
+
+
+    /* =========================================================
+       CLOSE MODALS WHEN CLICKING OUTSIDE
+       ========================================================= */
+
+    editOverlay.addEventListener(
+        "click",
+        function (event) {
+
+            if (event.target === editOverlay) {
+
+                closeEditModal();
+
+            }
+
+        }
+    );
+
+
+    deleteOverlay.addEventListener(
+        "click",
+        function (event) {
+
+            if (event.target === deleteOverlay) {
+
+                closeDeleteModal();
+
+            }
+
+        }
+    );
+
+
+    /* =========================================================
+       ESC KEY
+       ========================================================= */
+
+    document.addEventListener(
+        "keydown",
+        function (event) {
+
+            if (event.key === "Escape") {
+
+                closeEditModal();
+
+                closeDeleteModal();
+
+            }
+
+        }
+    );
+
+
+    /* =========================================================
+       START
+       ========================================================= */
+
+    loadStudents();
+
+</script>
+
+</body>
+</html>

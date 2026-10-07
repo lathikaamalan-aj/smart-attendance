@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Upload Timetable – Admin Console</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+
+:root{
+    --ink:#1B2B22;
+    --paper:#F7F4EC;
+    --card:#FCFAF4;
+    --moss:#3D5A45;
+    --moss-dark:#2C4433;
+    --gold:#B8863E;
+    --gold-soft:#E4CFA0;
+    --line:#DCD5C4;
+    --muted:#6B6558;
+    --red:#9C4A3E;
+}
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter',-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+}
+
+h1,h2,h3{
+    font-family:'Source Serif 4',Georgia,serif;
+}
+
+main{
+    max-width:760px;
+    margin:0 auto;
+    padding:48px 32px 80px;
+}
+
+.back-link{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:13px;
+    color:var(--muted);
+    text-decoration:none;
+    margin-bottom:20px;
+}
+
+.back-link:hover{
+    color:var(--ink);
+}
+
+header.top{
+    padding-bottom:24px;
+    margin-bottom:28px;
+    border-bottom:1px solid var(--line);
+}
+
+header.top h1{
+    font-size:28px;
+    font-weight:600;
+    margin:0 0 6px 0;
+}
+
+header.top p{
+    margin:0;
+    color:var(--muted);
+    font-size:14px;
+}
+
+.dropzone{
+    border:1px dashed var(--line);
+    background:var(--card);
+    padding:40px 24px;
+    text-align:center;
+    cursor:pointer;
+}
+
+.dropzone.dragover{
+    border-color:var(--gold);
+    background:#FBF3E3;
+}
+
+.dropzone .icon{
+    font-size:22px;
+    color:var(--moss-dark);
+    margin-bottom:10px;
+    display:block;
+}
+
+.dropzone h3{
+    font-size:16px;
+    font-weight:600;
+    margin:0 0 6px 0;
+}
+
+.dropzone p{
+    font-size:13px;
+    color:var(--muted);
+    margin:0;
+}
+
+.dropzone input[type="file"]{
+    display:none;
+}
+
+.file-hint{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:10px;
+    text-align:center;
+}
+
+.file-summary{
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    border:1px solid var(--line);
+    background:var(--card);
+    padding:12px 16px;
+    margin-top:16px;
+    font-size:14px;
+}
+
+.file-summary.show{
+    display:flex;
+}
+
+.file-summary .name{
+    font-weight:500;
+}
+
+.file-summary .remove{
+    background:none;
+    border:none;
+    color:var(--red);
+    cursor:pointer;
+    font-size:13px;
+    font-family:'Inter',sans-serif;
+}
+
+.preview-label{
+    font-size:13px;
+    color:var(--muted);
+    margin:24px 0 12px 0;
+}
+
+.table-wrap{
+    border:1px solid var(--line);
+    background:var(--card);
+    overflow-x:auto;
+    max-height:320px;
+    overflow-y:auto;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13px;
+}
+
+th{
+    text-align:left;
+    font-weight:500;
+    color:var(--muted);
+    padding:10px 14px;
+    border-bottom:1px solid var(--line);
+    background:var(--card);
+    position:sticky;
+    top:0;
+}
+
+td{
+    padding:9px 14px;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+}
+
+tr:last-child td{
+    border-bottom:none;
+}
+
+.form-actions{
+    display:flex;
+    gap:12px;
+    margin-top:20px;
+}
+
+.btn-primary{
+    padding:11px 22px;
+    background:var(--moss-dark);
+    color:var(--paper);
+    border:none;
+    font-size:14px;
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    cursor:pointer;
+}
+
+.btn-primary:hover{
+    background:var(--ink);
+}
+
+.btn-primary:disabled{
+    opacity:.6;
+    cursor:not-allowed;
+}
+
+.btn-secondary{
+    padding:11px 22px;
+    background:none;
+    color:var(--muted);
+    border:1px solid var(--line);
+    font-size:14px;
+    font-family:'Inter',sans-serif;
+    cursor:pointer;
+}
+
+.btn-secondary:hover{
+    border-color:var(--ink);
+    color:var(--ink);
+}
+
+.confirm{
+    margin-top:16px;
+    padding:12px 14px;
+    border:1px solid var(--moss);
+    color:var(--moss-dark);
+    font-size:13px;
+    display:none;
+}
+
+.confirm.show{
+    display:block;
+}
+
+.error-message{
+    margin-top:16px;
+    padding:12px 14px;
+    border:1px solid var(--red);
+    color:var(--red);
+    font-size:13px;
+    display:none;
+}
+
+.error-message.show{
+    display:block;
+}
+
+@media(max-width:600px){
+
+    main{
+        padding:32px 18px 60px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<main>
+
+<a class="back-link" href="/admin">
+    &larr; Back to dashboard
+</a>
+
+<header class="top">
+
+    <h1>Upload timetable</h1>
+
+    <p>
+        Bring in a class timetable from a CSV or Excel file.
+    </p>
+
+</header>
+
+
+<!-- =====================================================
+     UPLOAD PANEL
+===================================================== -->
+
+<section id="panel-upload">
+
+<div
+    class="dropzone"
+    id="dropzone"
+>
+
+    <span class="icon">
+        &#8613;
+    </span>
+
+    <h3>
+        Drop a CSV or Excel file here
+    </h3>
+
+    <p>
+        or click to browse your computer
+    </p>
+
+    <input
+        type="file"
+        id="file-input"
+        accept=".csv,.xlsx,.xls"
+        multiple
+    >
+
+</div>
+
+
+<div class="file-hint">
+
+    You can select multiple CSV / Excel files at once
+
+</div>
+
+
+<div
+    class="file-summary"
+    id="file-summary"
+>
+
+    <span
+        class="name"
+        id="file-name"
+    ></span>
+
+    <button
+        class="remove"
+        id="file-remove"
+        type="button"
+    >
+        Remove
+    </button>
+
+</div>
+
+
+<div
+    id="preview-area"
+    style="display:none;"
+>
+
+    <div
+        class="preview-label"
+        id="preview-label"
+    >
+        Preview
+    </div>
+
+
+    <div class="table-wrap">
+
+        <table id="preview-table"></table>
+
+    </div>
+
+
+    <div class="form-actions">
+
+        <button
+            class="btn-primary"
+            id="confirm-upload"
+            type="button"
+        >
+            Upload timetable
+        </button>
+
+        <button
+            class="btn-secondary"
+            id="cancel-upload"
+            type="button"
+        >
+            Cancel
+        </button>
+
+    </div>
+
+
+    <div
+        class="confirm"
+        id="upload-confirm"
+    ></div>
+
+
+    <div
+        class="error-message"
+        id="upload-error"
+    ></div>
+
+</div>
+
+</section>
+
+</main>
+
+
+
+<script>
+
+/* =====================================================
+   FILE UPLOAD
+===================================================== */
+
+const dropzone =
+    document.getElementById("dropzone");
+
+const fileInput =
+    document.getElementById("file-input");
+
+const fileSummary =
+    document.getElementById("file-summary");
+
+const fileNameEl =
+    document.getElementById("file-name");
+
+const fileRemove =
+    document.getElementById("file-remove");
+
+const previewArea =
+    document.getElementById("preview-area");
+
+const previewLabel =
+    document.getElementById("preview-label");
+
+const previewTable =
+    document.getElementById("preview-table");
+
+const confirmUploadBtn =
+    document.getElementById("confirm-upload");
+
+const cancelUploadBtn =
+    document.getElementById("cancel-upload");
+
+const uploadConfirm =
+    document.getElementById("upload-confirm");
+
+const uploadError =
+    document.getElementById("upload-error");
+
+
+let parsedRows = [];
+let selectedFiles = [];
+
+
+dropzone.addEventListener(
+    "click",
+    () => fileInput.click()
+);
+
+
+["dragover","dragenter"].forEach(evt => {
+
+    dropzone.addEventListener(evt, e => {
+
+        e.preventDefault();
+
+        dropzone.classList.add("dragover");
+
+    });
+
+});
+
+
+["dragleave","drop"].forEach(evt => {
+
+    dropzone.addEventListener(evt, e => {
+
+        e.preventDefault();
+
+        dropzone.classList.remove("dragover");
+
+    });
+
+});
+
+
+dropzone.addEventListener("drop", e => {
+
+    const files = Array.from(e.dataTransfer.files);
+
+    if(files.length){
+
+        handleFiles(files);
+
+    }
+
+});
+
+
+fileInput.addEventListener(
+    "change",
+    e => {
+
+        const files = Array.from(e.target.files);
+
+        if(files.length){
+
+            handleFiles(files);
+
+        }
+
+    }
+);
+
+
+fileRemove.addEventListener(
+    "click",
+    resetUpload
+);
+
+
+cancelUploadBtn.addEventListener(
+    "click",
+    resetUpload
+);
+
+
+function resetUpload(){
+
+    fileInput.value = "";
+
+    fileSummary.classList.remove("show");
+
+    previewArea.style.display = "none";
+
+    uploadConfirm.classList.remove("show");
+
+    uploadError.classList.remove("show");
+
+    parsedRows = [];
+    selectedFiles = [];
+
+}
+
+
+async function handleFiles(files){
+
+    // Keep only supported files.
+    files = files.filter(file =>
+        /\.(csv|xlsx|xls)$/i.test(file.name)
+    );
+
+    if(!files.length){
+
+        alert("Please select CSV or Excel files.");
+
+        return;
+
+    }
+
+    selectedFiles = files;
+    parsedRows = [];
+
+    for(const file of files){
+
+        try{
+
+            const rows = await readFileRows(file);
+
+            if(rows.length >= 1){
+
+                // First file contributes the header.
+                if(parsedRows.length === 0){
+
+                    parsedRows = rows;
+
+                }
+                else{
+
+                    // Skip header from every additional file.
+                    parsedRows.push(...rows.slice(1));
+
+                }
+
+            }
+
+        }
+        catch(error){
+
+            console.error(
+                "Could not read:",
+                file.name,
+                error
+            );
+
+            alert(
+                `Could not read ${file.name}.`
+            );
+
+            return;
+
+        }
+
+    }
+
+    if(parsedRows.length < 2){
+
+        alert("The selected files do not contain timetable data.");
+
+        return;
+
+    }
+
+    fileNameEl.textContent =
+        `${files.length} file(s) selected`;
+
+    fileSummary.classList.add("show");
+
+    renderPreview(parsedRows);
+
+}
+
+
+function readFileRows(file){
+
+    return new Promise((resolve, reject) => {
+
+        const reader = new FileReader();
+
+        const isCSV =
+            /\.csv$/i.test(file.name);
+
+        reader.onload = e => {
+
+            try{
+
+                let rows = [];
+
+                if(isCSV){
+
+                    rows = parseCSV(
+                        e.target.result
+                    );
+
+                }
+                else{
+
+                    const wb =
+                        XLSX.read(
+                            e.target.result,
+                            {type:"array"}
+                        );
+
+                    const sheet =
+                        wb.Sheets[
+                            wb.SheetNames[0]
+                        ];
+
+                    rows =
+                        XLSX.utils.sheet_to_json(
+                            sheet,
+                            {
+                                header:1,
+                                defval:""
+                            }
+                        );
+
+                }
+
+                resolve(rows);
+
+            }
+            catch(error){
+
+                reject(error);
+
+            }
+
+        };
+
+        reader.onerror = () =>
+            reject(reader.error);
+
+        if(isCSV){
+
+            reader.readAsText(file);
+
+        }
+        else{
+
+            reader.readAsArrayBuffer(file);
+
+        }
+
+    });
+
+}
+
+function parseCSV(text){
+
+    return text
+        .trim()
+        .split(/\r?\n/)
+        .map(line =>
+            line
+                .split(",")
+                .map(c => c.trim())
+        );
+
+}
+
+
+function renderPreview(rows){
+
+    const header =
+        rows[0];
+
+    const body =
+        rows
+            .slice(1)
+            .filter(r =>
+                r.some(
+                    cell =>
+                        String(cell).trim() !== ""
+                )
+            );
+
+
+    previewLabel.textContent =
+        `Preview — ${body.length} row${body.length === 1 ? "" : "s"} found from ${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`;
+
+
+    let html =
+        "<thead><tr>" +
+        header
+            .map(h =>
+                `<th>${escapeHtml(h)}</th>`
+            )
+            .join("") +
+        "</tr></thead>";
+
+
+    html +=
+        "<tbody>" +
+        body
+            .slice(0,50)
+            .map(r =>
+                "<tr>" +
+                header
+                    .map(
+                        (_,i) =>
+                            `<td>${escapeHtml(
+                                r[i] ?? ""
+                            )}</td>`
+                    )
+                    .join("") +
+                "</tr>"
+            )
+            .join("") +
+        "</tbody>";
+
+
+    previewTable.innerHTML =
+        html;
+
+    previewArea.style.display =
+        "block";
+
+}
+
+
+function escapeHtml(str){
+
+    return String(str).replace(
+        /[&<>"']/g,
+        c => ({
+            "&":"&amp;",
+            "<":"&lt;",
+            ">":"&gt;",
+            '"':"&quot;",
+            "'":"&#39;"
+        }[c])
+    );
+
+}
+
+
+
+/* =====================================================
+   CSV / EXCEL UPLOAD
+===================================================== */
+
+confirmUploadBtn.addEventListener(
+    "click",
+    async () => {
+
+        uploadConfirm.classList.remove("show");
+
+        uploadError.classList.remove("show");
+
+
+        if(
+            !parsedRows ||
+            parsedRows.length < 2
+        ){
+
+            uploadError.textContent =
+                "Please select a CSV or Excel file first.";
+
+            uploadError.classList.add("show");
+
+            return;
+
+        }
+
+
+        confirmUploadBtn.disabled =
+            true;
+
+        confirmUploadBtn.textContent =
+            "Uploading...";
+
+
+        try{
+
+            const response =
+                await fetch(
+                    "/upload_timetable_csv",
+                    {
+
+                        method:"POST",
+
+                        headers:{
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:JSON.stringify({
+                            rows:parsedRows
+                        })
+
+                    }
+                );
+
+
+            const result =
+                await response.json();
+
+
+            if(result.success){
+
+                uploadConfirm.textContent =
+                    result.message ||
+                    "Timetable uploaded successfully.";
+
+                uploadConfirm.classList.add(
+                    "show"
+                );
+
+
+                if(
+                    typeof result.skipped === "number" &&
+                    result.skipped > 0
+                ){
+
+                    uploadConfirm.textContent +=
+                        ` ${result.skipped} row(s) skipped.`;
+
+                }
+
+
+                parsedRows = [];
+                selectedFiles = [];
+                fileInput.value = "";
+
+            }
+            else{
+
+                uploadError.textContent =
+                    result.message ||
+                    "Upload failed.";
+
+                uploadError.classList.add("show");
+
+            }
+
+        }
+        catch(error){
+
+            console.error(
+                "Upload error:",
+                error
+            );
+
+            uploadError.textContent =
+                "Could not connect to Flask server.";
+
+            uploadError.classList.add("show");
+
+        }
+
+
+        confirmUploadBtn.disabled =
+            false;
+
+        confirmUploadBtn.textContent =
+            "Upload timetable";
+
+    }
+);
+
+</script>
+
+</body>
+</html>

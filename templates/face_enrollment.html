@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Face Enrollment | Smart Attendance</title>
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Poppins", sans-serif;
+            background: linear-gradient(135deg, #071426, #0d1f38);
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 25px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 950px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 24px;
+            padding: 30px;
+            backdrop-filter: blur(18px);
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            font-size: 30px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #aebbd0;
+            font-size: 14px;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        .left,
+        .right {
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 20px;
+            padding: 22px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #dce5f2;
+        }
+
+        .input {
+            width: 100%;
+            padding: 14px 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            outline: none;
+            background: rgba(255, 255, 255, 0.07);
+            color: #ffffff;
+            font-family: "Poppins", sans-serif;
+            font-size: 14px;
+            margin-bottom: 18px;
+        }
+
+        .input::placeholder {
+            color: #8493a9;
+        }
+
+        .input:focus {
+            border-color: #5ea7ff;
+        }
+
+        .input[readonly] {
+            opacity: 0.85;
+            cursor: not-allowed;
+        }
+
+        .camera-box {
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #020914;
+            border-radius: 18px;
+            overflow: hidden;
+            position: relative;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            display: block;
+        }
+
+        .scan-frame {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 58%;
+            height: 75%;
+            transform: translate(-50%, -50%);
+            border: 3px solid rgba(255, 255, 255, 0.75);
+            border-radius: 50%;
+            pointer-events: none;
+            transition: transform .15s, box-shadow .2s, background .2s;
+        }
+
+        .scan-frame.live {
+            box-shadow:
+                0 0 0 9999px rgba(0, 0, 0, 0.18),
+                0 0 30px rgba(79, 168, 255, 0.55);
+        }
+
+        .scan-line {
+            position: absolute;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            top: 15%;
+            background: rgba(83, 177, 255, 0.9);
+            box-shadow: 0 0 12px rgba(83, 177, 255, 0.9);
+            opacity: 0;
+        }
+
+        .scan-frame.live .scan-line {
+            opacity: 1;
+            animation: scan 2.2s infinite ease-in-out;
+        }
+
+        @keyframes scan {
+            0% {
+                top: 15%;
+            }
+
+            50% {
+                top: 82%;
+            }
+
+            100% {
+                top: 15%;
+            }
+        }
+
+        .hint {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #91a1b8;
+            text-align: center;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        button {
+            flex: 1;
+            padding: 13px 16px;
+            border: none;
+            border-radius: 12px;
+            font-family: "Poppins", sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition:
+                transform .15s,
+                background .3s,
+                border-color .3s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .start-btn {
+            background: #2577e8;
+            color: white;
+        }
+
+        .start-btn:hover:not(:disabled) {
+            background: #3185f4;
+        }
+
+        .capture-btn {
+            background: #12a878;
+            color: white;
+        }
+
+        .capture-btn:hover:not(:disabled) {
+            background: #14b984;
+        }
+
+        .stop-btn {
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .stop-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.13);
+        }
+
+        .progress-section {
+            margin-top: 25px;
+        }
+
+        .progress-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .progress-top span {
+            font-size: 13px;
+            color: #b9c7da;
+        }
+
+        .count {
+            font-weight: 700;
+            color: #ffffff !important;
+        }
+
+        .progress {
+            width: 100%;
+            height: 9px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            width: 0%;
+            height: 100%;
+            background: #2d8cff;
+            border-radius: 10px;
+            transition: width .25s ease;
+        }
+
+        .status {
+            margin-top: 18px;
+            min-height: 48px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #b9c7da;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .status.success {
+            background: rgba(18, 168, 120, 0.12);
+            border-color: rgba(18, 168, 120, 0.35);
+            color: #70e4bd;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.12);
+            border-color: rgba(239, 68, 68, 0.35);
+            color: #ff8e8e;
+        }
+
+        .instructions {
+            margin-top: 22px;
+        }
+
+        .instructions h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .instructions ul {
+            padding-left: 18px;
+            color: #aebbd0;
+            font-size: 13px;
+            line-height: 1.9;
+        }
+
+        .completion {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 14px;
+            background: rgba(18, 168, 120, 0.12);
+            border: 1px solid rgba(18, 168, 120, 0.35);
+            text-align: center;
+        }
+
+        .completion.show {
+            display: block;
+        }
+
+        .completion h3 {
+            color: #6de0b8;
+            margin-bottom: 5px;
+        }
+
+        .completion p {
+            color: #b9c7da;
+            font-size: 13px;
+        }
+
+        .continue-btn {
+            margin-top: 14px;
+            width: 100%;
+            background: #2577e8;
+            color: white;
+        }
+
+        @media (max-width: 760px) {
+            body {
+                padding: 15px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .content {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Face Enrollment</h1>
+        <p>Register your face for Smart Attendance</p>
+    </div>
+
+    <div class="content">
+
+        <!-- LEFT SIDE -->
+        <div class="left">
+
+            <label class="label" for="studentId">
+                Student Register Number
+            </label>
+
+            <!-- Student ID is automatically loaded after registration -->
+            <input
+                type="text"
+                id="studentId"
+                class="input"
+                placeholder="Student Register Number"
+                autocomplete="off"
+                readonly
+            >
+
+            <div class="camera-box" id="frame">
+
+                <video
+                    id="video"
+                    autoplay
+                    muted
+                    playsinline
+                ></video>
+
+                <div class="scan-frame">
+                    <div class="scan-line"></div>
+                </div>
+
+            </div>
+
+            <div class="hint">
+                Keep your face inside the oval and make sure your face is clearly visible.
+            </div>
+
+            <div class="buttons">
+
+                <button
+                    type="button"
+                    class="start-btn"
+                    id="startBtn"
+                    onclick="startCamera()"
+                >
+                    Start Camera
+                </button>
+
+                <button
+                    type="button"
+                    class="capture-btn"
+                    id="captureBtn"
+                    onclick="captureFace()"
+                    disabled
+                >
+                    Capture Face
+                </button>
+
+                <button
+                    type="button"
+                    class="stop-btn"
+                    id="stopBtn"
+                    onclick="stopCamera()"
+                    disabled
+                >
+                    Stop
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- RIGHT SIDE -->
+        <div class="right">
+
+            <div class="progress-section">
+
+                <div class="progress-top">
+                    <span>Face Images</span>
+
+                    <span class="count">
+                        <span id="count">0</span> / 20
+                    </span>
+                </div>
+
+                <div class="progress">
+                    <div
+                        class="bar-fill"
+                        id="barFill"
+                    ></div>
+                </div>
+
+            </div>
+
+
+            <div
+                class="status"
+                id="status"
+            >
+                Waiting to start face enrollment.
+            </div>
+
+
+            <div class="instructions">
+
+                <h3>Enrollment Instructions</h3>
+
+                <ul>
+                    <li>Keep only one person in front of the camera.</li>
+                    <li>Make sure your face is clearly visible.</li>
+                    <li>Keep your face inside the oval.</li>
+                    <li>Good lighting gives better recognition.</li>
+                    <li>Capture different face angles.</li>
+                    <li>Complete all 20 face images.</li>
+                </ul>
+
+            </div>
+
+
+            <div
+                class="completion"
+                id="completion"
+            >
+
+                <h3>Enrollment Completed</h3>
+
+                <p>
+                    Your 20 face images have been successfully saved.
+                </p>
+
+                <button
+                    type="button"
+                    class="continue-btn"
+                    onclick="continueToLogin()"
+                >
+                    Continue to Login
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<canvas
+    id="canvas"
+    style="display:none;"
+></canvas>
+
+
+<script>
+
+    const MAX_IMAGES = 20;
+
+    let stream = null;
+    let capturedCount = 0;
+
+
+    /*
+     * Student ID is NOT taken from the URL.
+     *
+     * Backend registration route stores:
+     *
+     * session["face_enrollment_student_id"]
+     *
+     * This page gets the student information from:
+     *
+     * /api/face_enrollment/student
+     *
+     * This prevents a user from changing the register number
+     * manually.
+     */
+
+    async function loadRegisteredStudent() {
+
+        try {
+
+            const response = await fetch(
+                "/api/face_enrollment/student",
+                {
+                    method: "GET",
+                    credentials: "same-origin"
+                }
+            );
+
+            const data = await response.json();
+
+            if (!data.success) {
+
+                setStatus(
+                    data.message || "Student information not found.",
+                    "error"
+                );
+
+                return;
+            }
+
+            document.getElementById("studentId").value =
+                data.student_id;
+
+            setStatus(
+                "Account created successfully. Start the camera to enroll your face.",
+                "success"
+            );
+
+        } catch (error) {
+
+            console.error(error);
+
+            setStatus(
+                "Unable to load student information.",
+                "error"
+            );
+        }
+    }
+
+
+    function setStatus(message, type = "") {
+
+        const status =
+            document.getElementById("status");
+
+        status.textContent = message;
+
+        status.className = "status";
+
+        if (type) {
+            status.classList.add(type);
+        }
+    }
+
+
+    async function startCamera() {
+
+        const studentId =
+            document.getElementById("studentId").value.trim();
+
+        if (!studentId) {
+
+            setStatus(
+                "Student information is not available.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (capturedCount >= MAX_IMAGES) {
+
+            setStatus(
+                "Face enrollment is already completed.",
+                "success"
+            );
+
+            return;
+        }
+
+
+        try {
+
+            stream =
+                await navigator.mediaDevices.getUserMedia({
+
+                    video: {
+                        width: 640,
+                        height: 480,
+                        facingMode: "user"
+                    },
+
+                    audio: false
+
+                });
+
+
+            const video =
+                document.getElementById("video");
+
+            video.srcObject = stream;
+
+
+            document
+                .getElementById("frame")
+                .classList.add("live");
+
+
+            document
+                .getElementById("captureBtn")
+                .disabled = false;
+
+
+            document
+                .getElementById("stopBtn")
+                .disabled = false;
+
+
+            document
+                .getElementById("startBtn")
+                .disabled = true;
+
+
+            setStatus(
+                "Camera started. Keep your face inside the oval."
+            );
+
+        } catch (error) {
+
+            console.error(error);
+
+            setStatus(
+                "Unable to access webcam. Please allow camera permission.",
+                "error"
+            );
+        }
+    }
+
+
+    async function captureFace() {
+
+        const studentId =
+            document.getElementById("studentId").value.trim();
+
+
+        if (!studentId) {
+
+            setStatus(
+                "Student information is not available.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (!stream) {
+
+            setStatus(
+                "Please start the camera first.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (capturedCount >= MAX_IMAGES) {
+
+            setStatus(
+                "20 face images already captured.",
+                "success"
+            );
+
+            return;
+        }
+
+
+        const video =
+            document.getElementById("video");
+
+        const canvas =
+            document.getElementById("canvas");
+
+
+        canvas.width =
+            video.videoWidth;
+
+        canvas.height =
+            video.videoHeight;
+
+
+        const context =
+            canvas.getContext("2d");
+
+
+        context.drawImage(
+            video,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+
+        const image =
+            canvas.toDataURL(
+                "image/jpeg",
+                0.9
+            );
+
+
+        setStatus(
+            "Capturing face..."
+        );
+
+
+        try {
+
+            /*
+             * IMPORTANT:
+             *
+             * We still send the student_id for compatibility.
+             *
+             * Backend MUST verify/use the session student ID
+             * instead of trusting this client value.
+             */
+
+            const response =
+                await fetch(
+                    "/api/face_enrollment",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        credentials: "same-origin",
+
+                        body: JSON.stringify({
+
+                            student_id: studentId,
+
+                            image: image
+
+                        })
+                    }
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!data.success) {
+
+                setStatus(
+                    data.message ||
+                    "Face capture failed.",
+                    "error"
+                );
+
+                return;
+            }
+
+
+            capturedCount++;
+
+
+            document
+                .getElementById("count")
+                .textContent =
+                capturedCount;
+
+
+            document
+                .getElementById("barFill")
+                .style.width =
+                (
+                    capturedCount /
+                    MAX_IMAGES *
+                    100
+                ) + "%";
+
+
+            if (capturedCount < MAX_IMAGES) {
+
+                setStatus(
+                    data.message ||
+                    "Face captured successfully. Change your face angle slightly and capture again.",
+                    "success"
+                );
+
+            }
+
+
+            if (capturedCount >= MAX_IMAGES) {
+
+                document
+                    .getElementById("captureBtn")
+                    .disabled = true;
+
+
+                document
+                    .getElementById("stopBtn")
+                    .disabled = true;
+
+
+                document
+                    .getElementById("completion")
+                    .classList.add("show");
+
+
+                setStatus(
+                    "Enrollment completed successfully. 20 face images saved.",
+                    "success"
+                );
+
+
+                stopCamera(false);
+            }
+
+
+        } catch (error) {
+
+            console.error(error);
+
+            setStatus(
+                "Server error while saving face.",
+                "error"
+            );
+        }
+    }
+
+
+    function stopCamera(showMessage = true) {
+
+        if (stream) {
+
+            stream
+                .getTracks()
+                .forEach(track => track.stop());
+
+            stream = null;
+        }
+
+
+        document
+            .getElementById("video")
+            .srcObject = null;
+
+
+        document
+            .getElementById("frame")
+            .classList.remove("live");
+
+
+        document
+            .getElementById("captureBtn")
+            .disabled = true;
+
+
+        document
+            .getElementById("stopBtn")
+            .disabled = true;
+
+
+        document
+            .getElementById("startBtn")
+            .disabled = false;
+
+
+        if (showMessage) {
+
+            setStatus(
+                "Camera stopped."
+            );
+        }
+    }
+
+
+    function continueToLogin() {
+
+        stopCamera(false);
+
+        window.location.href = "/login";
+    }
+
+
+    window.addEventListener(
+        "beforeunload",
+        function () {
+            stopCamera(false);
+        }
+    );
+
+
+    /*
+     * Automatically load the newly registered student's
+     * register number when this page opens.
+     */
+    window.addEventListener(
+        "DOMContentLoaded",
+        loadRegisteredStudent
+    );
+
+</script>
+
+</body>
+</html>

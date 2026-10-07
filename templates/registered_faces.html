@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance - Registered Faces</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0a1f44;--navy-2:#102a5c;--navy-3:#1d3f85;--accent:#3b82f6;--ink:#0f1b33;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb;--tint:#eaf0fb;
+  --ok:#16a34a;--ok-bg:#e8f8ee;--ok-line:#bfe9cd;--warn:#d97706;--warn-bg:#fff4dc;--warn-line:#fbdca0;--bad:#dc2626;--bad-bg:#fdecec;--bad-line:#f8c4c4}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+button,input,select{font-family:inherit}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* top bar */
+.topbar{background:var(--navy);color:#fff;height:72px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 6px 20px -8px rgba(10,31,68,.5)}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none;color:#fff}
+.brand-icon{width:42px;height:42px;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:16px}
+.brand h1{font-size:19px;font-weight:800}.brand p{font-size:12px;color:#a9b8d8;margin-top:2px}
+.top-r{display:flex;align-items:center;gap:18px}
+.adm{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px}
+.adm .av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#dbe7ff,#9db9f2);color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:14px}
+.logout-btn{text-decoration:none;display:inline-flex;align-items:center;gap:8px;border-left:1px solid rgba(255,255,255,.2);padding:6px 0 6px 18px;color:#fff;font-weight:600;font-size:14px;transition:opacity .2s}
+.logout-btn:hover{opacity:.8}
+
+/* page */
+.wrap{max-width:1500px;margin:0 auto;padding:22px 32px 48px}
+.back{display:inline-flex;align-items:center;gap:10px;text-decoration:none;background:#fff;color:var(--navy);border:1px solid #cfdcf3;padding:10px 18px;border-radius:10px;font-weight:700;font-size:14px;transition:background .2s,box-shadow .2s}
+.back:hover{background:var(--tint);box-shadow:0 8px 18px -12px rgba(10,31,68,.6)}
+.page-h{display:flex;align-items:center;gap:18px;margin:22px 0 22px;animation:rise .5s both}
+.page-h .big{width:46px;height:46px;color:var(--navy)}.page-h .big svg{width:46px;height:46px;stroke-width:1.6}
+.page-h h2{font-size:30px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
+.page-h p{color:var(--muted);font-size:15px;margin-top:2px}
+.page-h .rf{margin-left:auto}
+
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-bottom:22px}
+.st{display:flex;align-items:center;gap:18px;padding:22px 24px;border-radius:14px;border:1px solid;animation:rise .5s both}
+.st:nth-child(2){animation-delay:.05s}.st:nth-child(3){animation-delay:.1s}.st:nth-child(4){animation-delay:.15s}
+.st .ic{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;color:#fff;flex:none}
+.st .ic svg{width:28px;height:28px}
+.st span{display:block;font-size:15px;font-weight:600;color:#33415c}
+.st b{display:block;font-size:30px;font-weight:800;line-height:1.15;margin:2px 0;color:var(--ink)}
+.st b small{font-size:22px;font-weight:700}
+.st em{font-style:normal;font-size:13px;color:var(--muted)}
+.st.blue{background:#eaf1ff;border-color:#c5d8fb}.st.blue .ic{background:#3b82f6}
+.st.green{background:#e9f8f1;border-color:#bfe6d3}.st.green .ic{background:#16a36a}
+.st.amber{background:#fff6e3;border-color:#fbe0a6}.st.amber .ic{background:#f59e0b}
+.st.purple{background:#f1edff;border-color:#d6cbfb}.st.purple .ic{background:#7c5cf0}
+
+/* layout */
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:22px;align-items:start}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 26px -20px rgba(10,31,68,.5)}
+
+/* toolbar */
+.tools{display:grid;grid-template-columns:1fr 150px 190px 160px;gap:12px;padding:14px;margin-bottom:14px}
+.srch{position:relative}
+.srch svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#7b8aa6;width:18px;height:18px}
+.srch input,.tools select{width:100%;height:46px;border:1px solid #d5e0ee;border-radius:10px;background:#fff;font-size:14px;color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
+.srch input{padding:0 14px 0 42px}
+.tools select{padding:0 12px;cursor:pointer}
+.srch input:focus,.tools select:focus{border-color:var(--navy-3);box-shadow:0 0 0 4px rgba(29,63,133,.12)}
+
+/* table */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+thead th{background:#f1f5fb;color:var(--ink);padding:14px 14px;text-align:left;font-weight:800;font-size:13px;white-space:nowrap}
+thead th:first-child{border-top-left-radius:10px}thead th:last-child{border-top-right-radius:10px}
+tbody td{padding:9px 14px;border-bottom:1px solid #edf1f6;vertical-align:middle;white-space:nowrap}
+tbody tr{transition:background .15s;cursor:pointer;animation:rise .35s both}
+tbody tr:hover{background:#f6f9ff}
+tbody tr.sel{background:#eaf1ff;box-shadow:inset 3px 0 0 var(--accent)}
+.ph{width:50px;height:50px;border-radius:50%;object-fit:cover;background:#dfe7f5;display:block;border:2px solid #fff;box-shadow:0 2px 8px -2px rgba(10,31,68,.35)}
+.ph.nf{display:grid;place-items:center;color:#6b7c9c;font-weight:800;font-size:15px;background:linear-gradient(135deg,#e6edf9,#cfdcf3)}
+.nm{font-weight:600}
+.smp{font-weight:700}.smp.registered{color:var(--ok)}.smp.incomplete{color:var(--warn)}.smp.not_registered{color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:99px;font-size:13px;font-weight:600;border:1px solid}
+.pill svg{width:17px;height:17px;stroke-width:2.3}
+.pill.registered{color:#15803d;background:var(--ok-bg);border-color:var(--ok-line)}
+.pill.incomplete{color:#b45309;background:var(--warn-bg);border-color:var(--warn-line)}
+.pill.not_registered{color:#b91c1c;background:var(--bad-bg);border-color:var(--bad-line)}
+.vbtn{display:inline-flex;align-items:center;gap:8px;border:0;background:var(--navy);color:#fff;padding:10px 20px;border-radius:9px;font-weight:700;font-size:14px;cursor:pointer;transition:background .2s,transform .15s}
+.vbtn:hover{background:var(--navy-3)}.vbtn:active{transform:scale(.96)}
+.empty{text-align:center;color:var(--muted);padding:44px 12px!important;cursor:default}
+
+/* footer / pager */
+.foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;color:var(--muted);font-size:13px}
+.pager{display:flex;gap:8px}
+.pager button{min-width:38px;height:38px;border:1px solid #d5e0ee;background:#fff;border-radius:8px;font-weight:700;font-size:14px;color:var(--ink);cursor:pointer;transition:background .2s}
+.pager button:hover:not(:disabled){background:var(--tint)}
+.pager button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.pager button:disabled{opacity:.4;cursor:default}
+
+/* side panel */
+.panel{padding:22px;position:sticky;top:94px;max-height:calc(100vh - 112px);overflow-y:auto}
+.ph-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.ph-h h3{font-size:19px;font-weight:800;color:var(--navy)}
+.x{border:0;background:transparent;width:34px;height:34px;border-radius:50%;cursor:pointer;color:var(--navy);display:grid;place-items:center;transition:background .2s,transform .2s}
+.x:hover{background:var(--tint);transform:rotate(90deg)}
+.who{display:flex;gap:16px;align-items:center;padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.who .ph{width:80px;height:80px}
+.who h4{font-size:19px;font-weight:800;color:var(--navy)}
+.who p{color:var(--muted);font-size:14px;margin-top:3px}
+.who p i{font-style:normal;margin:0 6px;color:#c0cadb}
+.sh{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.sh h5{font-size:16px;font-weight:800;color:var(--navy)}
+.sh .pill{padding:5px 12px;font-size:12px}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px 10px}
+.sm{text-align:center}
+.sm button,.sm div.slot{display:block;width:100%;aspect-ratio:1/1;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#eef2f9;padding:0;cursor:zoom-in;transition:transform .2s,box-shadow .2s}
+.sm button:hover{transform:translateY(-3px);box-shadow:0 12px 20px -12px rgba(10,31,68,.6)}
+.sm img{width:100%;height:100%;object-fit:cover;display:block}
+.sm div.slot{border:1.5px dashed #c8d4e8;background:#f8faff;cursor:default}
+.sm span{display:block;font-size:12px;color:var(--accent);margin-top:5px;font-weight:600}
+.sm.miss span{color:#9aa8c2}
+.note{display:flex;gap:12px;align-items:flex-start;margin-top:20px;padding:14px 16px;border-radius:10px;background:#eaf1ff;border:1px solid #cfe0fb;color:#1e40af}
+.note svg{width:26px;height:26px;flex:none;margin-top:1px}
+.note b{display:block;font-size:13px;font-weight:700}.note small{font-size:12px;color:#3b5fa8}
+.note.warn{background:var(--warn-bg);border-color:var(--warn-line);color:#92400e}.note.warn small{color:#a16207}
+.note.bad{background:var(--bad-bg);border-color:var(--bad-line);color:#991b1b}.note.bad small{color:#b45353}
+.note a{color:inherit;font-weight:700}
+.ph-empty{text-align:center;color:var(--muted);padding:50px 10px;line-height:1.6}
+.ph-empty svg{width:46px;height:46px;stroke-width:1.5;color:#b7c4dc;margin-bottom:10px}
+.sk{height:14px;border-radius:8px;background:linear-gradient(90deg,#eef2fb 25%,#f8faff 50%,#eef2fb 75%);background-size:200% 100%;animation:sh 1.2s infinite;margin:10px 0}
+@keyframes sh{to{background-position:-200% 0}}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* lightbox */
+.lb{position:fixed;inset:0;background:rgba(10,31,68,.78);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:2000;padding:20px}
+.lb.on{display:flex}
+.lb figure{background:#fff;border-radius:16px;padding:14px;max-width:min(92vw,520px);box-shadow:0 30px 70px rgba(0,0,0,.4)}
+.lb img{display:block;max-width:100%;max-height:70vh;border-radius:10px;margin:0 auto}
+.lb figcaption{text-align:center;margin-top:10px;font-weight:700;color:var(--navy);font-size:14px}
+
+/* toast */
+.toast{position:fixed;right:24px;bottom:24px;max-width:90vw;padding:14px 18px;background:var(--navy);color:#fff;border-radius:12px;border-left:4px solid var(--accent);box-shadow:0 14px 34px rgba(0,0,0,.28);transform:translateY(100px);opacity:0;transition:.35s cubic-bezier(.2,.8,.2,1);z-index:3000;font-size:14px;font-weight:600}
+.toast.show{transform:none;opacity:1}
+.backdrop{display:none}
+
+@media(max-width:1280px){.layout{grid-template-columns:minmax(0,1fr) 360px}.grid5{gap:10px 8px}}
+@media(max-width:1100px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .layout{grid-template-columns:1fr}
+  .panel{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:86vh;border-radius:20px 20px 0 0;z-index:1500;transform:translateY(105%);transition:transform .35s cubic-bezier(.2,.8,.2,1);box-shadow:0 -20px 50px rgba(10,31,68,.35)}
+  .panel.open{transform:none}
+  .backdrop.on{display:block;position:fixed;inset:0;background:rgba(10,31,68,.5);z-index:1400}
+}
+@media(max-width:760px){
+  .topbar{padding:0 16px}.brand p,.adm span{display:none}
+  .wrap{padding:16px 14px 40px}.page-h h2{font-size:24px}.page-h .big{display:none}
+  .tools{grid-template-columns:1fr 1fr}.srch{grid-column:1/-1}
+  .stats{gap:12px}.st{padding:16px;gap:12px}.st .ic{width:46px;height:46px}.st b{font-size:24px}
+}
+@media(max-width:480px){.stats{grid-template-columns:1fr}.grid5{grid-template-columns:repeat(4,1fr)}}
+@media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.7a3.5 3.5 0 0 1 0 6.6M18 14.8c2 .7 3.2 2.5 3.7 5.2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.2-7.5 9.5-4.4-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M8.7 12l2.4 2.4 4.3-4.8"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.5l9.5 16.5h-19z"/><path d="M12 10v4.5M12 17.2v.1"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M4 18l5-5 4 4 3-3 4 4"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l3 3 5-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.8v.1"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+</svg>
+
+<header class="topbar">
+  <a class="brand" href="/admin">
+    <div class="brand-icon">SA</div>
+    <div><h1>Smart Attendance</h1><p>College Attendance System</p></div>
+  </a>
+  <div class="top-r">
+    <div class="adm"><div class="av">A</div><span>Admin</span></div>
+    <a class="logout-btn" href="/logout"><svg class="i"><use href="#i-out"/></svg>Logout</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <a class="back" href="/admin"><svg class="i"><use href="#i-back"/></svg>Admin Dashboard</a>
+
+  <div class="page-h">
+    <div class="big"><svg class="i"><use href="#i-users"/></svg></div>
+    <div><h2>Registered Faces</h2><p>View and manage student face registrations</p></div>
+    <button class="back rf" id="refresh" type="button"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+  </div>
+
+  <section class="stats" id="stats">
+    <div class="st blue"><div class="ic"><svg class="i"><use href="#i-users"/></svg></div><div><span>Total Students</span><b id="sTotal">–</b><em>Students in the system</em></div></div>
+    <div class="st green"><div class="ic"><svg class="i"><use href="#i-shield"/></svg></div><div><span>Registered</span><b id="sReg">–</b><em>Face registration completed</em></div></div>
+    <div class="st amber"><div class="ic"><svg class="i"><use href="#i-warn"/></svg></div><div><span>Incomplete</span><b id="sInc">–</b><em id="sIncNote">Less than {{ required }} samples</em></div></div>
+    <div class="st purple"><div class="ic"><svg class="i"><use href="#i-img"/></svg></div><div><span>Total Samples</span><b id="sSamples">–</b><em>Across all registered students</em></div></div>
+  </section>
+
+  <div class="layout">
+    <div>
+      <div class="card tools">
+        <div class="srch"><svg class="i"><use href="#i-search"/></svg><input id="q" type="search" placeholder="Search by Student ID or Name..." autocomplete="off"></div>
+        <select id="fYear"><option value="">All Year</option><option value="I">I Year</option><option value="II">II Year</option><option value="III">III Year</option><option value="IV">IV Year</option></select>
+        <select id="fDept"><option value="">All Department</option></select>
+        <select id="fStatus"><option value="">All Status</option><option value="registered">Registered</option><option value="incomplete">Incomplete</option><option value="not_registered">Not Registered</option></select>
+      </div>
+
+      <div class="card">
+        <div class="tw">
+          <table>
+            <thead><tr><th>#</th><th>Photo</th><th>Student ID</th><th>Name</th><th>Year</th><th>Department</th><th>Samples</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody id="rows"><tr><td colspan="9"><div class="sk"></div><div class="sk"></div><div class="sk"></div></td></tr></tbody>
+          </table>
+        </div>
+        <div class="foot"><span id="showing"></span><div class="pager" id="pager"></div></div>
+      </div>
+    </div>
+
+    <aside class="card panel" id="panel" aria-label="Face samples">
+      <div class="ph-h"><h3>View Face Samples</h3><button class="x" id="pClose" type="button" aria-label="Close"><svg class="i"><use href="#i-close"/></svg></button></div>
+      <div id="pBody"></div>
+    </aside>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="lb" id="lb"><figure><img id="lbImg" alt="Face sample"><figcaption id="lbCap"></figcaption></figure></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)};
+var REQ={{ required }},PAGE=8;
+var ALL=[],view=[],page=1,selected=null,detailReq=0;
+
+function esc(t){var n=document.createElement("i");n.textContent=t==null?"":t;return n.innerHTML}
+function ic(n){return'<svg class="i"><use href="#i-'+n+'"/></svg>'}
+function initials(n){var p=String(n||"?").trim().split(/\s+/);return((p[0]||"?")[0]+(p.length>1?p[p.length-1][0]:"")).toUpperCase()}
+function toast(m){var t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(function(){t.classList.remove("show")},3200)}
+var LABEL={registered:["Registered","check"],incomplete:["Incomplete","warn"],not_registered:["Not Registered","x"]};
+function pill(s){var l=LABEL[s]||LABEL.not_registered;return'<span class="pill '+s+'">'+ic(l[1])+l[0]+'</span>'}
+function photo(s,cls){return s.photo?'<img class="ph '+(cls||"")+'" src="'+esc(s.photo)+'" alt="'+esc(s.name)+'" loading="lazy">':'<div class="ph nf '+(cls||"")+'">'+esc(initials(s.name))+'</div>'}
+
+function getJSON(u){return fetch(u,{credentials:"same-origin",cache:"no-store"}).then(function(r){
+  if(r.status===403)throw new Error("Access denied. Please log in as admin.");
+  if(!r.ok)throw new Error("Request failed ("+r.status+")");return r.json()})}
+
+/* ---------- list ---------- */
+function load(keep){
+  return getJSON("/api/registered_faces").then(function(d){
+    ALL=d.students||[];var s=d.summary||{};
+    $("#sTotal").textContent=s.total_students;$("#sReg").textContent=s.registered;$("#sInc").textContent=s.incomplete;
+    $("#sSamples").innerHTML=s.total_samples+' <small>/ '+s.max_samples+'</small>';
+    fillDepts();applyFilters(keep);
+    if(!keep&&!selected&&window.innerWidth>1100){var first=ALL.filter(function(x){return x.samples>0})[0]||ALL[0];if(first)openStudent(first.student_id)}
+    else if(selected){openStudent(selected,true)}
+    if(!ALL.length){renderPanelEmpty()}
+  }).catch(function(e){
+    $("#rows").innerHTML='<tr><td class="empty" colspan="9">'+esc(e.message||"Could not load faces.")+'</td></tr>';toast(e.message||"Could not load faces.")})}
+
+function fillDepts(){var sel=$("#fDept"),cur=sel.value,set={};
+  ALL.forEach(function(s){if(s.department)set[s.department]=1});
+  sel.innerHTML='<option value="">All Department</option>'+Object.keys(set).sort().map(function(d){return'<option value="'+esc(d)+'">'+esc(d)+'</option>'}).join("");
+  sel.value=cur}
+
+function applyFilters(keepPage){
+  var q=$("#q").value.trim().toLowerCase(),y=$("#fYear").value,d=$("#fDept").value,st=$("#fStatus").value;
+  view=ALL.filter(function(s){
+    return(!q||s.student_id.toLowerCase().indexOf(q)>-1||String(s.name).toLowerCase().indexOf(q)>-1)&&
+      (!y||s.year===y)&&(!d||s.department===d)&&(!st||s.status===st)});
+  if(!keepPage)page=1;
+  var pages=Math.max(1,Math.ceil(view.length/PAGE));if(page>pages)page=pages;
+  renderTable()}
+
+function renderTable(){
+  var start=(page-1)*PAGE,slice=view.slice(start,start+PAGE);
+  $("#rows").innerHTML=slice.length?slice.map(function(s,i){
+    return'<tr data-id="'+esc(s.student_id)+'" class="'+(s.student_id===selected?"sel":"")+'" style="animation-delay:'+i*35+'ms">'+
+     '<td>'+(start+i+1)+'</td><td>'+photo(s)+'</td><td>'+esc(s.student_id)+'</td><td class="nm">'+esc(s.name)+'</td>'+
+     '<td>'+esc(s.year)+'</td><td>'+esc(s.department)+'</td>'+
+     '<td class="smp '+s.status+'">'+s.samples+'/'+REQ+'</td><td>'+pill(s.status)+'</td>'+
+     '<td><button class="vbtn" type="button" data-view="'+esc(s.student_id)+'">'+ic("eye")+'View</button></td></tr>'}).join("")
+   :'<tr><td class="empty" colspan="9">No students match your filters.</td></tr>';
+  var from=view.length?start+1:0,to=Math.min(start+PAGE,view.length);
+  $("#showing").textContent="Showing "+from+" to "+to+" of "+view.length+" students";
+  renderPager()}
+
+function renderPager(){
+  var pages=Math.max(1,Math.ceil(view.length/PAGE)),b=[];
+  b.push('<button type="button" data-p="'+(page-1)+'" '+(page<=1?"disabled":"")+' aria-label="Previous">‹</button>');
+  var nums=[];for(var p=1;p<=pages;p++){if(p===1||p===pages||Math.abs(p-page)<=1)nums.push(p);else if(nums[nums.length-1]!=="…")nums.push("…")}
+  nums.forEach(function(p){b.push(p==="…"?'<button type="button" disabled>…</button>':'<button type="button" data-p="'+p+'" class="'+(p===page?"on":"")+'">'+p+'</button>')});
+  b.push('<button type="button" data-p="'+(page+1)+'" '+(page>=pages?"disabled":"")+' aria-label="Next">›</button>');
+  $("#pager").innerHTML=b.join("")}
+
+/* ---------- side panel ---------- */
+function renderPanelEmpty(){selected=null;$("#pBody").innerHTML='<div class="ph-empty">'+ic("users")+'<br>Select a student and click <b>View</b><br>to see the captured face samples.</div>';
+  $("#panel").classList.remove("open");$("#backdrop").classList.remove("on");renderTable()}
+
+function openStudent(id,silent){
+  selected=id;var my=++detailReq;
+  if(!silent){$("#pBody").innerHTML='<div class="sk"></div><div class="sk"></div><div class="sk" style="height:120px"></div>'}
+  if(window.innerWidth<=1100&&!silent){$("#panel").classList.add("open");$("#backdrop").classList.add("on")}
+  var rows=document.querySelectorAll("#rows tr");[].forEach.call(rows,function(r){r.classList.toggle("sel",r.dataset.id===id)});
+  getJSON("/api/registered_faces/"+encodeURIComponent(id)).then(function(d){
+    if(my!==detailReq)return;paintPanel(d)
+  }).catch(function(e){if(my!==detailReq)return;$("#pBody").innerHTML='<div class="ph-empty">'+esc(e.message||"Could not load samples.")+'</div>'})}
+
+function paintPanel(d){
+  var first=d.images[0],avatar=first?'<img class="ph" src="'+esc(first.url)+'" alt="'+esc(d.name)+'">':'<div class="ph nf">'+esc(initials(d.name))+'</div>';
+  var cells=[],byNo={};d.images.forEach(function(im){byNo[im.number]=im});
+  var total=Math.max(d.required,d.images.length);
+  for(var n=1;n<=total;n++){var im=byNo[n];
+    cells.push(im?'<div class="sm"><button type="button" data-zoom="'+esc(im.url)+'" data-n="'+n+'"><img src="'+esc(im.url)+'" alt="Sample '+n+'" loading="lazy"></button><span>'+n+'</span></div>'
+                 :'<div class="sm miss"><div class="slot"></div><span>'+n+'</span></div>')}
+  var note;
+  if(d.status==="registered")note='<div class="note">'+ic("info")+'<div><b>'+d.samples+' face samples captured successfully</b><small>These images are used for face recognition.</small></div></div>';
+  else if(d.status==="incomplete")note='<div class="note warn">'+ic("warn")+'<div><b>Only '+d.samples+' of '+d.required+' samples captured</b><small>Ask the student to finish enrollment, or capture the rest from <a href="/face_register">Face Registration</a>.</small></div></div>';
+  else note='<div class="note bad">'+ic("x")+'<div><b>No face samples yet</b><small>Student has not completed face enrollment. You can capture from <a href="/face_register">Face Registration</a>.</small></div></div>';
+  $("#pBody").innerHTML='<div class="who">'+avatar+'<div><h4>'+esc(d.name)+'</h4><p>'+esc(d.student_id)+'</p><p>'+esc(d.year)+' Year<i>|</i>'+esc(d.department)+'</p></div></div>'+
+    '<div class="sh"><h5>Face Samples ('+d.samples+'/'+d.required+')</h5>'+pill(d.status)+'</div><div class="grid5">'+cells.join("")+'</div>'+note}
+
+/* ---------- events ---------- */
+$("#rows").addEventListener("click",function(e){var tr=e.target.closest("tr[data-id]");if(tr)openStudent(tr.dataset.id)});
+$("#pager").addEventListener("click",function(e){var b=e.target.closest("button[data-p]");if(!b||b.disabled)return;page=+b.dataset.p;renderTable()});
+["#fYear","#fDept","#fStatus"].forEach(function(s){$(s).addEventListener("change",function(){applyFilters()})});
+$("#q").addEventListener("input",function(){applyFilters()});
+$("#pClose").addEventListener("click",renderPanelEmpty);
+$("#backdrop").addEventListener("click",function(){$("#panel").classList.remove("open");this.classList.remove("on")});
+$("#pBody").addEventListener("click",function(e){var z=e.target.closest("[data-zoom]");if(!z)return;
+  $("#lbImg").src=z.dataset.zoom;$("#lbCap").textContent="Sample "+z.dataset.n;$("#lb").classList.add("on")});
+$("#lb").addEventListener("click",function(){this.classList.remove("on")});
+document.addEventListener("keydown",function(e){if(e.key==="Escape"){$("#lb").classList.remove("on");$("#panel").classList.remove("open");$("#backdrop").classList.remove("on")}});
+$("#refresh").addEventListener("click",function(){load(true).then(function(){toast("Face list refreshed.")})});
+/* new enrollments happen on other devices: refresh when tab regains focus */
+document.addEventListener("visibilitychange",function(){if(!document.hidden)load(true)});
+
+load(false);
+})();
+</script>
+</body>
+</html>

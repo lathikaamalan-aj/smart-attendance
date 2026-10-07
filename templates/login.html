@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#2563EB; --blue-dark:#1D4ED8;
+    --ink:#0F172A; --muted:#94A3B8; --label:#334155;
+    --line:#E2E8F0; --field:#F8FAFC; --white:#fff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{min-height:100%}
+  body{
+    font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:32px 16px;
+    background:
+      radial-gradient(circle at 0% 20%, #A5B8F5 0%, transparent 45%),
+      radial-gradient(circle at 100% 90%, #8EC5E8 0%, transparent 45%),
+      #F1F5FF;
+    -webkit-font-smoothing:antialiased;
+  }
+  .card{
+    width:100%;max-width:576px;background:var(--white);
+    border-radius:32px;padding:36px 36px 40px;
+    box-shadow:0 25px 60px -15px rgba(30,58,138,.25);
+  }
+  .logo{
+    width:64px;height:64px;margin:0 auto 14px;border-radius:16px;
+    border:2px solid var(--blue);background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 20px -6px rgba(37,99,235,.35);
+  }
+  .logo svg{width:30px;height:30px;stroke:var(--blue)}
+  h1{text-align:center;font-size:32px;font-weight:800;letter-spacing:-.02em}
+  .sub{text-align:center;color:#64748B;font-size:15px;margin:4px 0 24px}
+
+  .tabs{
+    display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px;
+    background:#F1F5F9;border:1px solid var(--line);border-radius:18px;margin-bottom:26px;
+  }
+  .tab{
+    border:0;background:transparent;padding:13px;border-radius:13px;
+    font:600 15px 'Plus Jakarta Sans',sans-serif;color:#64748B;cursor:pointer;
+    transition:background .2s,color .2s,box-shadow .2s;
+  }
+  .tab[aria-selected="true"]{background:#fff;color:var(--blue);box-shadow:0 2px 8px rgba(15,23,42,.1)}
+  .tab:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px 14px}
+  .full{grid-column:1/-1}
+  label{
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:12.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+    color:var(--label);margin-bottom:8px;
+  }
+  label a{font-size:13px;font-weight:700;text-transform:none;letter-spacing:0;color:var(--blue);text-decoration:none}
+  label a:hover{text-decoration:underline}
+
+  .input{position:relative}
+  .input > svg.ico{
+    position:absolute;left:14px;top:50%;transform:translateY(-50%);
+    width:17px;height:17px;stroke:#94A3B8;fill:none;stroke-width:1.8;pointer-events:none;
+  }
+  .input input,.input select{
+    width:100%;height:48px;padding:0 14px 0 42px;
+    font:500 14.5px 'Plus Jakarta Sans',sans-serif;color:var(--ink);
+    background:var(--field);border:1px solid var(--line);border-radius:14px;outline:none;
+    appearance:none;-webkit-appearance:none;
+    transition:border-color .15s,box-shadow .15s,background .15s;
+  }
+  .input input::placeholder{color:#A8B3C5}
+  .input select:invalid{color:#475569}
+  .input input:focus,.input select:focus{
+    border-color:var(--blue);background:#fff;box-shadow:0 0 0 4px rgba(37,99,235,.12);
+  }
+  .input .chev{
+    position:absolute;right:14px;top:50%;transform:translateY(-50%);
+    width:16px;height:16px;stroke:var(--ink);fill:none;stroke-width:2;pointer-events:none;
+  }
+  .eye{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    width:38px;height:38px;border:0;background:none;cursor:pointer;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .eye svg{width:18px;height:18px;stroke:#94A3B8;fill:none;stroke-width:1.8}
+  .eye:hover svg{stroke:var(--blue)}
+  .eye:focus-visible{outline:2px solid var(--blue)}
+  .has-eye input{padding-right:48px}
+
+  .btn{
+    width:100%;height:54px;margin-top:26px;border:0;border-radius:14px;cursor:pointer;
+    background:linear-gradient(180deg,var(--blue),var(--blue-dark));color:#fff;
+    font:700 16px 'Plus Jakarta Sans',sans-serif;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 12px 24px -8px rgba(37,99,235,.55);
+    transition:transform .08s,filter .15s,opacity .15s;
+  }
+  .btn:hover{filter:brightness(1.06)}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.65;cursor:wait}
+  .btn:focus-visible{outline:3px solid #93C5FD;outline-offset:2px}
+  .btn svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2}
+
+  .msg{display:none;font-size:13.5px;font-weight:500;padding:12px 14px;border-radius:12px;margin-bottom:18px}
+  .msg.show{display:block}
+  .msg.err{background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA}
+  .msg.ok{background:#F0FDF4;color:#166534;border:1px solid #BBF7D0}
+
+  .panel[hidden]{display:none}
+  .foot{margin-top:24px;font-size:13px;font-weight:500;color:#7C8BA5;text-align:center}
+
+  @media (max-width:520px){
+    .card{padding:28px 20px 32px;border-radius:26px}
+    .grid{grid-template-columns:1fr}
+    h1{font-size:27px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<main class="card">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+  </div>
+  <h1>Smart Attendance</h1>
+  <p class="sub" id="subtitle">Select an option below to access your portal</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tabLogin" aria-selected="true" aria-controls="loginPanel">Login</button>
+    <button class="tab" role="tab" id="tabRegister" aria-selected="false" aria-controls="registerPanel">Create Account</button>
+  </div>
+
+  <div class="msg" id="msg" role="alert"></div>
+
+  <!-- LOGIN -->
+  <form class="panel" id="loginPanel" role="tabpanel" aria-labelledby="tabLogin" novalidate>
+    <div class="grid">
+      <div class="full">
+        <label for="l_user">Username / Register No</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          <input id="l_user" type="text" placeholder="Enter username or Reg No" autocomplete="username" required>
+        </div>
+      </div>
+      <div class="full">
+        <label for="l_pass">Password <a href="#" id="forgot">Forgot password?</a></label>
+        <div class="input has-eye">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+          <input id="l_pass" type="password" placeholder="Enter password" autocomplete="current-password" required>
+          <button type="button" class="eye" data-target="l_pass" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <button class="btn" type="submit">Sign In <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+  </form>
+
+  <!-- REGISTER -->
+  <form class="panel" id="registerPanel" role="tabpanel" aria-labelledby="tabRegister" hidden novalidate>
+    <div class="grid">
+      <div class="full">
+        <label for="r_name">Full Name</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          <input id="r_name" type="text" placeholder="e.g. Alex Morgan" autocomplete="name" required>
+        </div>
+      </div>
+      <div>
+        <label for="r_reg">Register No</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>
+          <input id="r_reg" type="text" inputmode="numeric" maxlength="12" placeholder="12-digit Reg No" required>
+        </div>
+      </div>
+      <div>
+        <label for="r_user">Username</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg>
+          <input id="r_user" type="text" placeholder="Choose username" autocomplete="username" required>
+        </div>
+      </div>
+      <div class="full">
+        <label for="r_pass">Password</label>
+        <div class="input has-eye">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+          <input id="r_pass" type="password" placeholder="Create password" autocomplete="new-password" required>
+          <button type="button" class="eye" data-target="r_pass" aria-label="Show password"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
+      </div>
+      <div>
+        <label for="r_year">Year</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <select id="r_year" required>
+            <option value="" disabled selected>Select Year</option>
+            <option value="I">I Year</option>
+            <option value="II">II Year</option>
+            <option value="III">III Year</option>
+            <option value="IV">IV Year</option>
+          </select>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+      </div>
+      <div>
+        <label for="r_dept">Department</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 8h2M13 8h2M9 12h2M13 12h2M10 21v-4h4v4"/></svg>
+          <select id="r_dept" required>
+            <option value="" disabled selected>Select Dept</option>
+            <option>CSE</option>
+            <option>IT</option>
+            <option>ECE</option>
+            <option>EEE</option>
+            <option>MECH</option>
+            <option>CIVIL</option>
+            <option>AI&amp;DS</option>
+          </select>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+      </div>
+      <div>
+        <label for="r_email">Email</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+          <input id="r_email" type="email" placeholder="student@edu.in" autocomplete="email" required>
+        </div>
+      </div>
+      <div>
+        <label for="r_phone">Phone</label>
+        <div class="input">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></svg>
+          <input id="r_phone" type="tel" placeholder="+919876543210" autocomplete="tel" required>
+        </div>
+      </div>
+    </div>
+    <button class="btn" type="submit">Next <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+  </form>
+
+  <p class="foot">Smart Attendance Management System • Secured with Biometrics</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const msg = $("msg");
+
+function showMsg(text, type){
+  msg.textContent = text;
+  msg.className = "msg show " + type;
+}
+function clearMsg(){ msg.className = "msg"; }
+
+/* ---------- Tabs ---------- */
+function switchTab(which){
+  const login = which === "login";
+  $("tabLogin").setAttribute("aria-selected", login);
+  $("tabRegister").setAttribute("aria-selected", !login);
+  $("loginPanel").hidden = !login;
+  $("registerPanel").hidden = login;
+  $("subtitle").textContent = login
+    ? "Select an option below to access your portal"
+    : "Enter your details to register as a student";
+  clearMsg();
+}
+$("tabLogin").onclick = () => switchTab("login");
+$("tabRegister").onclick = () => switchTab("register");
+
+/* ---------- Show / hide password ---------- */
+document.querySelectorAll(".eye").forEach(btn => {
+  btn.onclick = () => {
+    const input = $(btn.dataset.target);
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  };
+});
+
+$("forgot").onclick = e => {
+  e.preventDefault();
+  showMsg("Please contact your administrator to reset your password.", "err");
+};
+
+/* ---------- POST helper ---------- */
+async function post(url, fields){
+  if (window.location.protocol === "file:") {
+    throw new Error("Open this page through http://127.0.0.1:5000/login after starting Flask.");
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+    body: new URLSearchParams(fields),
+    credentials: "same-origin"
+  });
+  const isJson = (res.headers.get("content-type") || "").includes("application/json");
+  const data = isJson ? await res.json() : {success:false, message:`Server error (HTTP ${res.status}).`};
+  return {ok: res.ok, data};
+}
+
+function setBusy(form, busy, label){
+  const b = form.querySelector(".btn");
+  b.disabled = busy;
+  if (busy) { b.dataset.html = b.innerHTML; b.textContent = label; }
+  else if (b.dataset.html) { b.innerHTML = b.dataset.html; }
+}
+
+/* ---------- Login ---------- */
+$("loginPanel").addEventListener("submit", async e => {
+  e.preventDefault();
+  clearMsg();
+  const username = $("l_user").value.trim();
+  const password = $("l_pass").value;
+  if (!username || !password) return showMsg("Enter both username and password.", "err");
+
+  setBusy(e.target, true, "Signing in…");
+  try {
+    const {ok, data} = await post("/login", {username, password});
+    if (ok && data.success) {
+      showMsg("Signed in. Redirecting…", "ok");
+      window.location.href = data.redirect;
+      return;
+    }
+    showMsg(data.message || "Login failed.", "err");
+  } catch (err) {
+    showMsg(err.message, "err");
+  }
+  setBusy(e.target, false);
+});
+
+/* ---------- Register ---------- */
+$("registerPanel").addEventListener("submit", async e => {
+  e.preventDefault();
+  clearMsg();
+  const f = {
+    name: $("r_name").value.trim(),
+    student_id: $("r_reg").value.trim(),
+    username: $("r_user").value.trim(),
+    password: $("r_pass").value,
+    year: $("r_year").value,
+    department: $("r_dept").value,
+    email: $("r_email").value.trim(),
+    phone: $("r_phone").value.trim()
+  };
+
+  if (Object.values(f).some(v => !v)) return showMsg("Please fill in every field.", "err");
+  if (!/^\d{12}$/.test(f.student_id)) return showMsg("Register No must be exactly 12 digits.", "err");
+  if (f.password.length < 6) return showMsg("Password must be at least 6 characters.", "err");
+  if (!/^\S+@\S+\.\S+$/.test(f.email)) return showMsg("Enter a valid email address.", "err");
+  if (!/^\+?\d{10,13}$/.test(f.phone)) return showMsg("Enter a valid phone number.", "err");
+
+  setBusy(e.target, true, "Creating account…");
+  try {
+    const {ok, data} = await post("/register", f);
+    if (ok && data.success) {
+      showMsg("Account created. Redirecting…", "ok");
+      window.location.href = data.redirect;
+      return;
+    }
+    showMsg(data.message || "Registration failed.", "err");
+  } catch (err) {
+    showMsg(err.message, "err");
+  }
+  setBusy(e.target, false);
+});
+</script>
+</body>
+</html>

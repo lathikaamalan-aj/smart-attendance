@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Kiosk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9EFEE; --ink:#14262B; --muted:#5B6F73; --panel:#FFFFFF;
+    --line:#C9D6D4; --accent:#0E7C7B; --ok:#1F8A4C; --warn:#B26A00; --bad:#B3261E;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,Arial,sans-serif;
+       display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:24px;padding:24px}
+  .cam{position:relative;background:#0b1a1d;border-radius:20px;overflow:hidden;min-height:60vh}
+  video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block}
+  .ring{position:absolute;inset:12% 26%;border:4px solid rgba(255,255,255,.75);border-radius:50%;
+        transition:border-color .2s}
+  .cam.ok .ring{border-color:var(--ok)} .cam.warn .ring{border-color:var(--warn)} .cam.bad .ring{border-color:var(--bad)}
+  .side{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .status{background:var(--panel);border:2px solid var(--line);border-radius:20px;padding:28px;min-height:230px}
+  .status.ok{border-color:var(--ok)} .status.warn{border-color:var(--warn)} .status.bad{border-color:var(--bad)}
+  .status h1{font-size:2.2rem;line-height:1.15;margin:0 0 10px;overflow-wrap:anywhere}
+  .status p{font-size:1.15rem;margin:6px 0;color:var(--muted)}
+  .status .sub{color:var(--ink)}
+  .recent{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px;flex:1;overflow:auto}
+  .recent h2{font-size:1rem;margin:0 0 10px;color:var(--muted);font-weight:700}
+  .recent ul{list-style:none;margin:0;padding:0}
+  .recent li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+  .recent li:first-child{border-top:0}
+  .t{color:var(--muted);white-space:nowrap}
+  @media (max-width:800px){body{grid-template-columns:1fr}.cam{min-height:50vh}}
+  @media (prefers-reduced-motion:reduce){.ring{transition:none}}
+</style>
+</head>
+<body>
+  <div class="cam" id="cam">
+    <video id="v" autoplay muted playsinline></video>
+    <div class="ring"></div>
+  </div>
+  <div class="side">
+    <div class="status" id="status" aria-live="polite">
+      <h1 id="title">Starting camera</h1>
+      <p id="msg">Allow camera access if the browser asks.</p>
+    </div>
+    <div class="recent">
+      <h2>Recently marked</h2>
+      <ul id="list"></ul>
+    </div>
+  </div>
+  <canvas id="c" hidden></canvas>
+
+<script>
+const KEY = new URLSearchParams(location.search).get("key") || "";
+const SCAN_EVERY_MS = 1500, HOLD_MS = 4000;
+const v = document.getElementById("v"), c = document.getElementById("c");
+let busy = false, holdUntil = 0, lastLogged = "";
+
+function show(kind, title, msg){
+  document.getElementById("status").className = "status " + kind;
+  document.getElementById("cam").className = "cam " + kind;
+  document.getElementById("title").textContent = title;
+  document.getElementById("msg").textContent = msg || "";
+}
+function logMark(name, subject){
+  const id = name + "|" + subject;
+  if (id === lastLogged) return;
+  lastLogged = id;
+  const li = document.createElement("li");
+  const t = new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  li.innerHTML = "<span></span><span class='t'>" + t + "</span>";
+  li.firstChild.textContent = name + " - " + subject;
+  const list = document.getElementById("list");
+  list.prepend(li);
+  while (list.children.length > 6) list.lastChild.remove();
+}
+
+async function startCamera(){
+  try{
+    v.srcObject = await navigator.mediaDevices.getUserMedia({video:{width:640, height:480, facingMode:"user"}, audio:false});
+    show("", "Look at the camera", "Your attendance is marked automatically.");
+    setInterval(scan, SCAN_EVERY_MS);
+  }catch(e){
+    show("bad", "Camera not available", "Allow camera access in the browser, then reload this page.");
+  }
+}
+
+async function scan(){
+  if (busy || Date.now() < holdUntil || !v.videoWidth) return;
+  busy = true;
+  try{
+    c.width = 480; c.height = Math.round(480 * v.videoHeight / v.videoWidth);
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    const res = await fetch("/api/recognize_face", {
+      method:"POST",
+      headers:{"Content-Type":"application/json", "X-Kiosk-Key":KEY},
+      body: JSON.stringify({image: c.toDataURL("image/jpeg", 0.8)})
+    });
+    if (res.status === 403){ show("bad", "Kiosk not authorised", "Open this page with the correct ?key= in the address."); return; }
+    const d = await res.json();
+
+    if (d.recognized){
+      holdUntil = Date.now() + HOLD_MS;
+      if (d.attendance_marked){
+        show("ok", d.name, d.attendance_message);
+        logMark(d.name, d.attendance_subject);
+      } else {
+        show("warn", d.name, d.attendance_message || "No class is running right now.");
+      }
+    } else if (d.message === "No face detected."){
+      show("", "Look at the camera", "Stand about an arm's length away.");
+    } else {
+      show("warn", "Face not recognised", "Face the camera directly and try again.");
+    }
+  }catch(e){
+    show("bad", "Server not reachable", "Check that the attendance server is running.");
+  }finally{
+    busy = false;
+  }
+}
+startCamera();
+</script>
+</body>
+</html>

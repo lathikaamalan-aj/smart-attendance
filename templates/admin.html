@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance - Admin Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0a1f44;--navy-2:#102a5c;--navy-3:#1d3f85;--accent:#3b82f6;--ink:#0f1b33;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb;--tint:#eaf0fb}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button{font-family:inherit}
+svg.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* top bar */
+.topbar{background:var(--navy);color:#fff;height:72px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 6px 20px -8px rgba(10,31,68,.5)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-icon{width:42px;height:42px;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:16px}
+.brand h1{font-size:19px;font-weight:800}
+.brand p{font-size:12px;color:#a9b8d8;margin-top:2px}
+.logout-btn{text-decoration:none;display:inline-block;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;padding:9px 18px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;transition:background .2s,border-color .2s}
+.logout-btn:hover{background:rgba(255,255,255,.12);border-color:#fff}
+
+/* hero */
+.hero{background:var(--navy);color:#fff;padding:34px 32px 78px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;right:-90px;top:-140px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,.38),transparent 68%);animation:drift 9s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate(-50px,40px)}}
+.hero-in{max-width:1200px;margin:0 auto;position:relative;animation:rise .6s both}
+.hero h2{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.hero p{margin-top:8px;color:#b8c6e3;max-width:560px;line-height:1.6;font-size:15px}
+.date{display:inline-block;margin-top:16px;font-size:13px;font-weight:600;background:rgba(255,255,255,.1);padding:6px 14px;border-radius:99px}
+
+.container{max-width:1200px;margin:-48px auto 56px;padding:0 24px;position:relative}
+.group{margin-bottom:26px}
+.group-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px}
+.group-head h3{font-size:16px;font-weight:800;color:var(--navy)}
+.group-head span{font-size:13px;color:var(--muted)}
+.group:first-of-type .group-head h3,.group:first-of-type .group-head span{color:#fff}
+.group:first-of-type .group-head span{color:#b8c6e3}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;text-align:left;cursor:pointer;display:flex;gap:16px;align-items:flex-start;
+  position:relative;overflow:hidden;box-shadow:0 10px 26px -18px rgba(10,31,68,.45);
+  transition:transform .25s,box-shadow .25s,border-color .25s;animation:rise .55s both;animation-delay:calc(var(--n)*55ms + 150ms)}
+.tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent);transform:scaleY(0);transform-origin:top;transition:transform .3s}
+.tile:hover{transform:translateY(-4px);border-color:#bcd0f2;box-shadow:0 18px 34px -16px rgba(10,31,68,.5)}
+.tile:hover::before{transform:scaleY(1)}
+.tile:focus-visible,.logout-btn:focus-visible,.back:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tile-icon{flex:none;width:48px;height:48px;border-radius:13px;background:var(--tint);color:var(--navy-3);display:grid;place-items:center;transition:background .25s,color .25s,transform .25s}
+.tile:hover .tile-icon{background:var(--navy);color:#fff;transform:rotate(-6deg) scale(1.05)}
+.tile h3{font-size:16px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.tile p{font-size:13px;color:var(--muted);line-height:1.55}
+.tile:disabled{cursor:progress;opacity:.75}
+.tile.busy .tile-icon svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+/* manual banner */
+.manual-section{margin-top:8px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;box-shadow:0 10px 26px -18px rgba(10,31,68,.4)}
+.manual-section h2{font-size:18px;color:var(--navy);font-weight:800}
+.manual-section p{font-size:14px;color:var(--muted);margin-top:6px;max-width:620px;line-height:1.6}
+.btn{border:0;background:var(--navy);color:#fff;padding:12px 22px;border-radius:11px;cursor:pointer;font-weight:700;font-size:14px;transition:background .2s,transform .15s,box-shadow .2s}
+.btn:hover{background:var(--navy-3);box-shadow:0 10px 20px -10px rgba(10,31,68,.7)}
+.btn:active{transform:scale(.97)}
+
+/* modal */
+.modal{display:flex;position:fixed;inset:0;background:rgba(10,31,68,.6);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:20px;z-index:1000;opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
+.modal.active{opacity:1;visibility:visible}
+.modal-box{width:100%;max-width:860px;max-height:90vh;overflow-y:auto;background:#fff;border-radius:20px;padding:28px;box-shadow:0 30px 70px rgba(0,0,0,.35);transform:translateY(18px) scale(.97);transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+.modal.active .modal-box{transform:none}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.modal-header h2{color:var(--navy);font-weight:800;font-size:21px}
+.close-btn{border:0;background:var(--tint);width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;color:var(--navy);transition:background .2s,transform .2s}
+.close-btn:hover{background:#d6e2f7;transform:rotate(90deg)}
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.field label{display:block;font-size:13px;font-weight:700;color:#41536f;margin-bottom:7px}
+.field input,.field select{width:100%;height:44px;border:1px solid #d5e0ee;border-radius:10px;padding:0 12px;font:inherit;font-size:14px;background:#fff;outline:none;transition:border-color .2s,box-shadow .2s}
+.field input:focus,.field select:focus{border-color:var(--navy-3);box-shadow:0 0 0 4px rgba(29,63,133,.12)}
+.load-btn,.save-btn{margin-top:20px}
+.student-list{margin-top:26px;animation:rise .4s both}
+.student-list h3{color:var(--navy);margin-bottom:12px;font-size:16px}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;max-height:340px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{background:var(--navy);color:#fff;padding:12px 14px;text-align:left;font-weight:600;position:sticky;top:0}
+td{padding:10px 14px;border-bottom:1px solid #edf1f6}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:#f4f7fb}
+.status-select{border:1px solid #d6e0ec;padding:7px 10px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;transition:background .2s,color .2s,border-color .2s}
+.status-select.Present{background:#ecfdf3;color:#15803d;border-color:#bbf0d0}
+.status-select.Absent{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+
+/* change password */
+.top-actions{display:flex;align-items:center;gap:10px}
+button.logout-btn{font-family:inherit;display:inline-flex;align-items:center;gap:8px}
+button.logout-btn svg{width:17px;height:17px}
+.pw-box{max-width:460px}
+.pw-sub{font-size:13px;color:var(--muted);margin:-10px 0 20px;line-height:1.5}
+.pw-field{margin-bottom:16px}
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:46px}
+.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;width:34px;height:34px;border-radius:8px;cursor:pointer;color:#7b8aa5;display:grid;place-items:center;transition:background .2s,color .2s}
+.eye:hover{background:var(--tint);color:var(--navy)}
+.eye svg{width:18px;height:18px}
+.meter{display:flex;gap:5px;margin-top:9px}
+.meter i{flex:1;height:5px;border-radius:99px;background:#e6edf8;transition:background .3s,transform .3s}
+.meter i.on{transform:scaleY(1.4)}
+.meter-label{font-size:12px;font-weight:700;margin-top:6px;min-height:16px;color:var(--muted)}
+.hint{font-size:12px;font-weight:700;margin-top:7px;min-height:16px}
+.hint.ok{color:#15803d}.hint.bad{color:#b91c1c}
+.field input.invalid{border-color:#f87171;box-shadow:0 0 0 4px rgba(248,113,113,.15)}
+.pw-error{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px}
+.pw-error.show{display:block;animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.pw-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:6px}
+.btn.ghost{background:var(--tint);color:var(--navy)}
+.btn.ghost:hover{background:#d6e2f7;box-shadow:none}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+
+/* toast */
+.toast{position:fixed;right:24px;bottom:24px;min-width:280px;max-width:90vw;padding:15px 18px 15px 20px;background:var(--navy);color:#fff;border-radius:12px;border-left:4px solid var(--accent);box-shadow:0 14px 34px rgba(0,0,0,.28);transform:translateY(100px);opacity:0;transition:.35s cubic-bezier(.2,.8,.2,1);z-index:2000;font-size:14px;font-weight:600}
+.toast.show{transform:none;opacity:1}
+
+.grid.four{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.topbar{padding:0 16px}.brand p{display:none}.hero{padding:26px 16px 70px}.hero h2{font-size:24px}.grid,.grid.four{grid-template-columns:1fr}.container{padding:0 14px}}
+@media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-add" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c.8-3.6 3.5-5.5 7-5.5M18 9v6M15 12h6"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.7a3.5 3.5 0 0 1 0 6.6M18 14.8c2 .7 3.2 2.5 3.7 5.2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 12.5l3 3 5-6"/></symbol>
+  <symbol id="i-report" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 17v-3M12 17v-6M15 17v-4"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-face" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M9 10v1M15 10v1M9.5 15c1.5 1.3 3.5 1.3 5 0"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></symbol>
+  <symbol id="i-faces" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16.5 4.7a3.5 3.5 0 0 1 0 6.6M18.5 14.8c1.8.7 2.9 2.4 3.3 5.2M19 7.2l.9.9 1.6-1.8"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6C3.6 8.5 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+</svg>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">SA</div>
+    <div><h1>Smart Attendance</h1><p>Admin Console</p></div>
+  </div>
+  <div class="top-actions">
+    <button class="logout-btn" id="open-pw" type="button"><svg class="i"><use href="#i-key"/></svg>Change Password</button>
+    <a class="logout-btn" href="/logout">Logout</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-in">
+    <h2>Admin Console</h2>
+    <p>Manage students, timetable and attendance using the Smart Attendance System.</p>
+    <span class="date" id="today"></span>
+  </div>
+</section>
+
+<main class="container">
+
+  <div class="group">
+    <div class="group-head"><h3>Students and timetable</h3><span>Records and schedules</span></div>
+    <div class="grid">
+      <button class="tile" style="--n:0" type="button" onclick="window.location.href='/upload_students'">
+        <div class="tile-icon"><svg class="i"><use href="#i-add"/></svg></div>
+        <div><h3>Add Students</h3><p>Add or upload student details into the attendance system.</p></div>
+      </button>
+      <button class="tile" style="--n:1" type="button" onclick="window.location.href='/view_students'">
+        <div class="tile-icon"><svg class="i"><use href="#i-users"/></svg></div>
+        <div><h3>View Students</h3><p>View registered students and their academic information.</p></div>
+      </button>
+      <button class="tile" style="--n:2" type="button" onclick="window.location.href='/upload_timetable'">
+        <div class="tile-icon"><svg class="i"><use href="#i-cal"/></svg></div>
+        <div><h3>Upload Timetable</h3><p>Upload and manage class timetable information.</p></div>
+      </button>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-head"><h3>Face recognition</h3><span>Register, train and mark</span></div>
+    <div class="grid four">
+      <button class="tile" style="--n:3" id="face-registration" type="button" onclick="window.location.href='/face_register'">
+        <div class="tile-icon"><svg class="i"><use href="#i-face"/></svg></div>
+        <div><h3>Face Registration</h3><p>Capture and register a student's face for attendance recognition.</p></div>
+      </button>
+      <button class="tile" style="--n:4" id="train-face-model" type="button">
+        <div class="tile-icon"><svg class="i"><use href="#i-gear"/></svg></div>
+        <div><h3>Train Face Model</h3><p>Train the recognition model using registered student face images.</p></div>
+      </button>
+      <button class="tile" style="--n:5" id="registered-faces" type="button" onclick="window.location.href='/registered_faces'">
+        <div class="tile-icon"><svg class="i"><use href="#i-faces"/></svg></div>
+        <div><h3>Registered Faces</h3><p>View face samples captured during student enrollment and check registration status.</p></div>
+      </button>
+      <button class="tile" style="--n:6" id="face-attendance" type="button" onclick="window.location.href='/face_recognition'">
+        <div class="tile-icon"><svg class="i"><use href="#i-cam"/></svg></div>
+        <div><h3>Face Attendance</h3><p>Recognize students through webcam and mark attendance automatically.</p></div>
+      </button>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-head"><h3>Attendance</h3><span>Mark and review</span></div>
+    <div class="grid">
+      <button class="tile" style="--n:7" type="button" id="manual-attendance-btn">
+        <div class="tile-icon"><svg class="i"><use href="#i-check"/></svg></div>
+        <div><h3>Manual Attendance</h3><p>Mark student attendance manually based on period and subject.</p></div>
+      </button>
+      <button class="tile" style="--n:8" type="button" onclick="window.location.href='/attendance_report'">
+        <div class="tile-icon"><svg class="i"><use href="#i-report"/></svg></div>
+        <div><h3>Attendance Report</h3><p>View attendance records and generate attendance reports.</p></div>
+      </button>
+    </div>
+  </div>
+
+  <section class="manual-section">
+    <div>
+      <h2>Attendance Management</h2>
+      <p>Use manual attendance when face recognition is unavailable or when attendance needs to be corrected manually.</p>
+    </div>
+    <button class="btn" id="manual-attendance-btn-2">Open Manual Attendance</button>
+  </section>
+</main>
+
+<!-- MANUAL ATTENDANCE MODAL -->
+<div class="modal" id="manual-modal" aria-hidden="true">
+  <div class="modal-box" role="dialog" aria-labelledby="mtitle">
+    <div class="modal-header">
+      <h2 id="mtitle">Manual Attendance</h2>
+      <button class="close-btn" id="close-modal" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="form-grid">
+      <div class="field"><label for="attendance-date">Date</label><input type="date" id="attendance-date"></div>
+      <div class="field"><label for="attendance-year">Year</label>
+        <select id="attendance-year"><option value="">Select Year</option><option value="I">1st Year</option><option value="II">2nd Year</option><option value="III">3rd Year</option><option value="IV">4th Year</option></select></div>
+      <div class="field"><label for="attendance-department">Department</label>
+        <select id="attendance-department"><option value="">Select Department</option><option value="CSE">CSE</option><option value="ECE">ECE</option><option value="EEE">EEE</option><option value="MECH">MECH</option><option value="CIVIL">CIVIL</option><option value="MTZ">MTZ</option></select></div>
+      <div class="field"><label for="attendance-subject">Subject</label>
+        <select id="attendance-subject"><option value="">Select Subject</option></select></div>
+      <div class="field"><label for="attendance-period">Period</label>
+        <select id="attendance-period"><option value="">Select Period</option></select></div>
+    </div>
+
+    <div class="student-list" id="timetable-preview" style="display:none; margin-top:16px;">
+      <h3 id="timetable-title">Timetable</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Faculty</th></tr></thead>
+          <tbody id="timetable-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="btn load-btn" id="load-students">Load Students</button>
+
+    <div class="student-list" id="student-list" style="display:none;">
+      <h3>Student Roster</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Student ID</th><th>Name</th><th>Status</th></tr></thead>
+          <tbody id="students-body"></tbody>
+        </table>
+      </div>
+      <button class="btn save-btn" id="save-attendance">Save Attendance</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="modal" id="pw-modal" aria-hidden="true">
+  <div class="modal-box pw-box" role="dialog" aria-labelledby="pwtitle">
+    <div class="modal-header">
+      <h2 id="pwtitle">Change Password</h2>
+      <button class="close-btn" id="close-pw" aria-label="Close" type="button">&times;</button>
+    </div>
+    <p class="pw-sub">Enter your current password, then choose a new one (minimum 6 characters).</p>
+    <div class="pw-error" id="pw-error" role="alert"></div>
+
+    <div class="field pw-field"><label for="pw-current">Current Password</label>
+      <div class="pw-wrap"><input type="password" id="pw-current" autocomplete="current-password">
+        <button type="button" class="eye" data-eye="pw-current" aria-label="Show password"><svg class="i"><use href="#i-eye"/></svg></button></div></div>
+
+    <div class="field pw-field"><label for="pw-new">New Password</label>
+      <div class="pw-wrap"><input type="password" id="pw-new" autocomplete="new-password">
+        <button type="button" class="eye" data-eye="pw-new" aria-label="Show password"><svg class="i"><use href="#i-eye"/></svg></button></div>
+      <div class="meter" id="meter"><i></i><i></i><i></i><i></i></div>
+      <div class="meter-label" id="meter-label"></div></div>
+
+    <div class="field pw-field"><label for="pw-confirm">Confirm New Password</label>
+      <div class="pw-wrap"><input type="password" id="pw-confirm" autocomplete="new-password">
+        <button type="button" class="eye" data-eye="pw-confirm" aria-label="Show password"><svg class="i"><use href="#i-eye"/></svg></button></div>
+      <div class="hint" id="match-hint"></div></div>
+
+    <div class="pw-actions">
+      <button class="btn ghost" id="cancel-pw" type="button">Cancel</button>
+      <button class="btn" id="save-pw" type="button">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  $("today").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  let toastTimer;
+  function showToast(message) {
+    const t = $("toast");
+    t.textContent = message;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+  }
+
+  /* modal */
+  const modal = $("manual-modal");
+  function openManualAttendance() {
+    modal.classList.add("active");
+    modal.setAttribute("aria-hidden", "false");
+    const d = $("attendance-date");
+    if (!d.value) d.value = new Date().toISOString().split("T")[0];
+  }
+  function closeManualAttendance() {
+    modal.classList.remove("active");
+    modal.setAttribute("aria-hidden", "true");
+  }
+  $("manual-attendance-btn").addEventListener("click", openManualAttendance);
+  $("manual-attendance-btn-2").addEventListener("click", openManualAttendance);
+  $("close-modal").addEventListener("click", closeManualAttendance);
+  modal.addEventListener("click", e => { if (e.target === modal) closeManualAttendance(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && modal.classList.contains("active")) closeManualAttendance(); });
+
+  /* subjects: Date/Year/Department -> ALL subjects for Year + Department */
+  const q = encodeURIComponent;
+
+  function clearManualRoster() {
+    $("student-list").style.display = "none";
+    $("students-body").innerHTML = "";
+  }
+
+  function clearTimetablePreview() {
+    $("timetable-preview").style.display = "none";
+    $("timetable-body").innerHTML = "";
+  }
+
+  async function loadTimetable() {
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    clearTimetablePreview();
+
+    if (!year || !department) return;
+
+    try {
+      const res = await fetch(`/api/admin_timetable?year=${q(year)}&department=${q(department)}`);
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Unable to load timetable.");
+      }
+
+      const rows = data.timetable || [];
+      const tbody = $("timetable-body");
+      tbody.innerHTML = "";
+
+      rows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${esc(row.day || "")}</td>
+                        <td>${esc(row.time || "")}</td>
+                        <td>${esc(row.subject || "")}</td>
+                        <td>${esc(row.faculty || "-")}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      $("timetable-title").textContent = `${year} Year - ${department} Timetable (${rows.length} periods)`;
+      $("timetable-preview").style.display = rows.length ? "block" : "none";
+
+      if (!rows.length) {
+        showToast("No timetable found for this Year and Department.");
+      }
+    } catch (err) {
+      console.error("TIMETABLE LOAD ERROR:", err);
+      showToast(err.message || "Unable to load timetable.");
+    }
+  }
+
+  async function loadSubjects() {
+    const date = $("attendance-date").value;
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const subjectSelect = $("attendance-subject");
+    const periodSelect = $("attendance-period");
+
+    subjectSelect.innerHTML = `<option value="">Select Subject</option>`;
+    periodSelect.innerHTML = `<option value="">Select Period</option>`;
+    clearManualRoster();
+
+    if (!year || !department) return;
+
+    if (!date) {
+      showToast("Please select the date first.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/manual_subjects?date=${q(date)}&year=${q(year)}&department=${q(department)}`);
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Unable to load subjects.");
+      }
+
+      const subjects = data.subjects || [];
+
+      subjects.forEach(subject => {
+        const option = document.createElement("option");
+        option.value = subject;
+        option.textContent = subject;
+        subjectSelect.appendChild(option);
+      });
+
+      if (!subjects.length) {
+        showToast("No subjects found for this Year and Department.");
+      }
+    } catch (err) {
+      console.error("SUBJECT LOAD ERROR:", err);
+      showToast(err.message || "Unable to load subjects.");
+    }
+  }
+
+  /* subject + date -> periods applicable to that subject on that day */
+  async function loadPeriods() {
+    const date = $("attendance-date").value;
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const subject = $("attendance-subject").value;
+    const periodSelect = $("attendance-period");
+
+    periodSelect.innerHTML = `<option value="">Select Period</option>`;
+    clearManualRoster();
+
+    if (!date || !year || !department || !subject) return;
+
+    try {
+      const res = await fetch(
+        `/api/manual_periods?date=${q(date)}&year=${q(year)}&department=${q(department)}&subject=${q(subject)}`
+      );
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Unable to load periods.");
+      }
+
+      const periods = data.periods || [];
+
+      periods.forEach(period => {
+        const option = document.createElement("option");
+        option.value = period;
+        option.textContent = period;
+        periodSelect.appendChild(option);
+      });
+
+      if (!periods.length) {
+        showToast(`No period found for ${data.day}.`);
+      }
+    } catch (err) {
+      console.error("PERIOD LOAD ERROR:", err);
+      showToast(err.message || "Unable to load periods.");
+    }
+  }
+
+  $("attendance-date").addEventListener("change", () => {
+    $("attendance-subject").innerHTML = `<option value="">Select Subject</option>`;
+    $("attendance-period").innerHTML = `<option value="">Select Period</option>`;
+    clearManualRoster();
+
+    if ($("attendance-year").value && $("attendance-department").value) {
+      loadSubjects();
+    }
+  });
+
+  $("attendance-year").addEventListener("change", () => { loadSubjects(); loadTimetable(); });
+  $("attendance-department").addEventListener("change", () => { loadSubjects(); loadTimetable(); });
+  $("attendance-subject").addEventListener("change", loadPeriods);
+  $("attendance-period").addEventListener("change", clearManualRoster);
+
+  /* roster */
+  $("load-students").addEventListener("click", async function () {
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const period = $("attendance-period").value;
+    const subject = $("attendance-subject").value;
+    if (!year || !department || !subject || !period) {
+      showToast("Please select year, department, subject and period.");
+      return;
+    }
+    try {
+      const res = await fetch(`/get_students?year=${q(year)}&department=${q(department)}`);
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.message || "Unable to load students.");
+      const students = data.students || [];
+      const tbody = $("students-body");
+      tbody.innerHTML = "";
+      students.forEach(s => {
+        const id = esc(s.roll_no || "");
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${id}</td><td>${esc(s.name || "")}</td>
+          <td><select class="status-select Present" data-student-id="${id}">
+            <option value="Present">Present</option><option value="Absent">Absent</option></select></td>`;
+        tbody.appendChild(row);
+      });
+      $("student-list").style.display = "block";
+      showToast(`${students.length} students loaded.`);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Unable to load students.");
+    }
+  });
+
+  // colour the status dropdown when it changes
+  $("students-body").addEventListener("change", e => {
+    if (e.target.classList.contains("status-select")) e.target.className = "status-select " + e.target.value;
+  });
+
+  /* save */
+  $("save-attendance").addEventListener("click", async function () {
+    const date = $("attendance-date").value;
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const period = $("attendance-period").value;
+    const subject = $("attendance-subject").value;
+    if (!date || !year || !department || !period || !subject) { showToast("Please fill all attendance details."); return; }
+
+    const records = [...document.querySelectorAll(".status-select")].map(s => ({ roll_no: s.dataset.studentId, status: s.value }));
+    if (records.length === 0) { showToast("No students available."); return; }
+
+    try {
+      const res = await fetch("/save_attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, year, department, period, subject, records })
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.message || "Unable to save attendance.");
+      showToast(data.message || "Attendance saved successfully.");
+      setTimeout(closeManualAttendance, 1200);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Attendance save failed.");
+    }
+  });
+
+  /* change password */
+  const pwModal = $("pw-modal");
+  const pwIds = ["pw-current", "pw-new", "pw-confirm"];
+  const pwErr = $("pw-error");
+  function pwReset() {
+    pwIds.forEach(id => { const el = $(id); el.value = ""; el.type = "password"; el.classList.remove("invalid"); });
+    document.querySelectorAll(".eye use").forEach(u => u.setAttribute("href", "#i-eye"));
+    pwErr.classList.remove("show"); updateMeter(); updateMatch();
+  }
+  function openPw() { pwReset(); pwModal.classList.add("active"); pwModal.setAttribute("aria-hidden", "false"); setTimeout(() => $("pw-current").focus(), 250); }
+  function closePw() { pwModal.classList.remove("active"); pwModal.setAttribute("aria-hidden", "true"); pwReset(); }
+  $("open-pw").addEventListener("click", openPw);
+  $("close-pw").addEventListener("click", closePw);
+  $("cancel-pw").addEventListener("click", closePw);
+  pwModal.addEventListener("click", e => { if (e.target === pwModal) closePw(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && pwModal.classList.contains("active")) closePw(); });
+
+  document.querySelectorAll(".eye").forEach(b => b.addEventListener("click", () => {
+    const input = $(b.dataset.eye), show = input.type === "password";
+    input.type = show ? "text" : "password";
+    b.querySelector("use").setAttribute("href", show ? "#i-eyeoff" : "#i-eye");
+    b.setAttribute("aria-label", show ? "Hide password" : "Show password");
+  }));
+
+  function strength(p) {
+    let s = 0;
+    if (p.length >= 6) s++;
+    if (p.length >= 10) s++;
+    if (/[a-z]/.test(p) && /[A-Z]/.test(p)) s++;
+    if (/\d/.test(p) && /[^A-Za-z0-9]/.test(p)) s++;
+    return p.length ? Math.max(1, s) : 0;
+  }
+  function updateMeter() {
+    const p = $("pw-new").value, s = strength(p);
+    const colors = ["#e6edf8", "#ef4444", "#f59e0b", "#3b82f6", "#16a34a"];
+    const labels = ["", "Weak", "Fair", "Good", "Strong"];
+    [...$("meter").children].forEach((bar, i) => {
+      bar.style.background = i < s ? colors[s] : colors[0];
+      bar.classList.toggle("on", i < s);
+    });
+    const l = $("meter-label"); l.textContent = labels[s]; l.style.color = colors[s] === colors[0] ? "" : colors[s];
+  }
+  function updateMatch() {
+    const n = $("pw-new").value, c = $("pw-confirm").value, h = $("match-hint");
+    if (!c) { h.textContent = ""; h.className = "hint"; return; }
+    const ok = n === c;
+    h.textContent = ok ? "Passwords match" : "Passwords do not match";
+    h.className = "hint " + (ok ? "ok" : "bad");
+  }
+  $("pw-new").addEventListener("input", () => { updateMeter(); updateMatch(); });
+  $("pw-confirm").addEventListener("input", updateMatch);
+
+  function pwFail(msg, ids) {
+    pwErr.textContent = msg; pwErr.classList.remove("show"); void pwErr.offsetWidth; pwErr.classList.add("show");
+    pwIds.forEach(id => $(id).classList.toggle("invalid", (ids || []).includes(id)));
+  }
+  $("save-pw").addEventListener("click", async function () {
+    const current = $("pw-current").value, next = $("pw-new").value, confirm = $("pw-confirm").value;
+    if (!current || !next || !confirm) return pwFail("Please fill all fields.", pwIds.filter(id => !$(id).value));
+    if (next.length < 6) return pwFail("New password must contain at least 6 characters.", ["pw-new"]);
+    if (next !== confirm) return pwFail("New passwords do not match.", ["pw-confirm"]);
+    if (next === current) return pwFail("New password must be different from the current password.", ["pw-new"]);
+
+    const btn = this; btn.disabled = true; btn.textContent = "Updating...";
+    try {
+      const res = await fetch("/api/change_password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ current_password: current, new_password: next, confirm_password: confirm })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return pwFail(data.message || "Unable to change password.", res.status === 400 && /current/i.test(data.message || "") ? ["pw-current"] : []);
+      }
+      closePw();
+      showToast(data.message || "Password changed successfully.");
+    } catch (err) {
+      console.error("CHANGE PASSWORD ERROR:", err);
+      pwFail("Network error. Please try again.");
+    } finally {
+      btn.disabled = false; btn.textContent = "Update Password";
+    }
+  });
+  [..."pw-current pw-new pw-confirm".split(" ")].forEach(id => $(id).addEventListener("keydown", e => { if (e.key === "Enter") $("save-pw").click(); }));
+
+  /* train model */
+  $("train-face-model").addEventListener("click", async function () {
+    const btn = $("train-face-model");
+    const heading = btn.querySelector("h3");
+    const original = heading.textContent;
+    btn.disabled = true;
+    btn.classList.add("busy");
+    heading.textContent = "Training...";
+    try {
+      const res = await fetch("/train_faces", { method: "POST", headers: { "Accept": "application/json" } });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Face model training failed.");
+      showToast(data.message || "Face model trained successfully.");
+    } catch (err) {
+      console.error("FACE TRAINING ERROR:", err);
+      showToast(err.message || "Unable to train face model.");
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove("busy");
+      heading.textContent = original;
+    }
+  });
+})();
+</script>
+</body>
+</html>
