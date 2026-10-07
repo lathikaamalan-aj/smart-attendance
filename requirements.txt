@@ -11,3 +11,4 @@ opencv-contrib-python==5.0.0.93
 opencv-python==4.13.0.92
 pillow==12.3.0
 Werkzeug==3.1.8
+gunicorn
