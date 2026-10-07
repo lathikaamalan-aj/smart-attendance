@@ -1,12 +1,15 @@
 import sqlite3
+import os
 
-conn = sqlite3.connect("attendance.db")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(BASE_DIR, "attendance.db")
+
+conn = sqlite3.connect(DATABASE)
 cursor = conn.cursor()
 
-
-# ==============================
+# ==========================================
 # USERS TABLE
-# ==============================
+# ==========================================
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
@@ -17,20 +20,12 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
-
-# ==============================
-# REMOVE OLD STUDENTS TABLE
-# ==============================
-
-cursor.execute("DROP TABLE IF EXISTS students")
-
-
-# ==============================
-# CREATE NEW STUDENTS TABLE
-# ==============================
+# ==========================================
+# STUDENTS TABLE
+# ==========================================
 
 cursor.execute("""
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
@@ -41,26 +36,26 @@ CREATE TABLE students (
 )
 """)
 
-
-# ==============================
+# ==========================================
 # ADMIN ACCOUNT
-# ==============================
+# ==========================================
 
 cursor.execute("""
-INSERT OR IGNORE INTO users (username, password, role)
+INSERT OR IGNORE INTO users
+(username, password, role)
 VALUES (?, ?, ?)
-""", ("admin", "admin@123", "admin"))
-
-
-# ==============================
-# SAVE
-# ==============================
+""", (
+    "admin",
+    "admin@123",
+    "admin"
+))
 
 conn.commit()
 conn.close()
 
-
-print("Database created successfully!")
-print("Admin account created:")
-print("Username: admin")
-print("Password: admin@123")
+print("===================================")
+print("Database initialized successfully")
+print("Database:", DATABASE)
+print("Admin username: admin")
+print("Admin password: admin@123")
+print("===================================")
