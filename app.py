@@ -13,7 +13,7 @@ import threading
 import webbrowser
 
 app = Flask(__name__)
-app.secret_key = "smart_attendance_secret_key"
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
 # Key the kiosk page sends so it can scan faces without an admin login.
 # Set a real value:  set KIOSK_KEY=your-secret   (Windows)  /  export KIOSK_KEY=your-secret
