@@ -125,6 +125,23 @@ button.logout-btn svg{width:17px;height:17px}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.topbar{padding:0 16px}.brand p{display:none}.hero{padding:26px 16px 70px}.hero h2{font-size:24px}.grid,.grid.four{grid-template-columns:1fr}.container{padding:0 14px}}
 @media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+
+/* ===== MOBILE FIT (added) ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,video{max-width:100%}
+@media(max-width:760px){input,select,textarea{font-size:16px!important}} /* stops iOS zoom-on-focus */
+
+@media(max-width:600px){
+  .topbar{gap:10px}
+  .brand{min-width:0;gap:10px}
+  .brand-icon{flex:none;width:38px;height:38px}
+  .brand h1{font-size:16px;line-height:1.15}
+  .top-actions{gap:6px;flex:none}
+  .logout-btn,button.logout-btn{padding:8px 12px;font-size:13px}
+  .toast{left:12px;right:12px;bottom:12px;min-width:0;max-width:none}
+  .modal-box{padding:20px 16px;border-radius:16px}
+}
+@media(max-width:440px){#open-pw .lbl{display:none}}
 </style>
 </head>
 <body>
@@ -150,7 +167,7 @@ button.logout-btn svg{width:17px;height:17px}
     <div><h1>Smart Attendance</h1><p>Admin Console</p></div>
   </div>
   <div class="top-actions">
-    <button class="logout-btn" id="open-pw" type="button"><svg class="i"><use href="#i-key"/></svg>Change Password</button>
+    <button class="logout-btn" id="open-pw" type="button" aria-label="Change Password"><svg class="i"><use href="#i-key"/></svg><span class="lbl">Change Password</span></button>
     <a class="logout-btn" href="/logout">Logout</a>
   </div>
 </header>

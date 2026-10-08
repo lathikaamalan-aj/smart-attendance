@@ -102,6 +102,23 @@ button#scanBtn.loading .spinner{display:block}
 @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.scan-line{opacity:0!important}}
+
+/* ===== MOBILE FIT (added) ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,video{max-width:100%}
+@media(max-width:760px){input,select,textarea{font-size:16px!important}} /* stops iOS zoom-on-focus */
+
+.back{white-space:nowrap}
+@media(max-width:600px){
+  header{padding:14px 16px}
+  .brand{gap:10px;min-width:0}
+  .brand h1{font-size:17px}
+  .card{padding:18px;border-radius:16px}
+  .cam{aspect-ratio:4/3}
+  .status{font-size:12px;padding:6px 12px}
+  .who{padding:16px}.who h3{font-size:18px}
+}
+@media(max-width:400px){.brand p{display:none}.back{padding:8px 12px}}
 </style>
 </head>
 <body>

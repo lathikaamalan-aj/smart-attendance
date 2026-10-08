@@ -142,7 +142,7 @@ tbody tr.sel{background:#eaf1ff;box-shadow:inset 3px 0 0 var(--accent)}
 @media(max-width:1280px){.layout{grid-template-columns:minmax(0,1fr) 360px}.grid5{gap:10px 8px}}
 @media(max-width:1100px){
   .stats{grid-template-columns:repeat(2,1fr)}
-  .layout{grid-template-columns:1fr}
+  .layout{grid-template-columns:minmax(0,1fr)}
   .panel{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:86vh;border-radius:20px 20px 0 0;z-index:1500;transform:translateY(105%);transition:transform .35s cubic-bezier(.2,.8,.2,1);box-shadow:0 -20px 50px rgba(10,31,68,.35)}
   .panel.open{transform:none}
   .backdrop.on{display:block;position:fixed;inset:0;background:rgba(10,31,68,.5);z-index:1400}
@@ -155,6 +155,28 @@ tbody tr.sel{background:#eaf1ff;box-shadow:inset 3px 0 0 var(--accent)}
 }
 @media(max-width:480px){.stats{grid-template-columns:1fr}.grid5{grid-template-columns:repeat(4,1fr)}}
 @media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+
+/* ===== MOBILE FIT (added) ===== */
+@media(max-width:1100px){.panel:not(.open){box-shadow:none}}   /* closed bottom-sheet was leaving a grey smudge at screen bottom */
+@media(max-width:600px){
+  .topbar{gap:10px}
+  .brand{min-width:0;gap:10px}
+  .brand-icon{flex:none;width:38px;height:38px}
+  .brand h1{font-size:16px;line-height:1.15}
+  .top-r{gap:10px;flex:none}
+  .logout-btn{padding-left:10px}
+}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,video{max-width:100%}
+@media(max-width:760px){input,select,textarea{font-size:16px!important}} /* stops iOS zoom-on-focus */
+
+.layout>*{min-width:0}              /* the actual overflow fix: lets the table scroll inside its card */
+@media(max-width:760px){
+  .tools select#fStatus{grid-column:1/-1}
+  .page-h{flex-wrap:wrap;gap:12px}
+  .toast{left:12px;right:12px;bottom:12px}
+  .foot{justify-content:center}
+}
 </style>
 </head>
 <body>

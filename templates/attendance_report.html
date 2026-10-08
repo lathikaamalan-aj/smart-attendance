@@ -134,6 +134,23 @@ tr.low .pct b{color:var(--red)}
 @media(max-width:900px){.filters{grid-template-columns:1fr 1fr}.filters .btn{grid-column:1/-1}.stats{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.topbar{padding:0 16px}.brand p{display:none}.wrap{padding:18px 12px 50px}.panel{padding:16px}.filters{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.actions{width:100%}.actions .btn{flex:1}}
 @media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+
+/* ===== MOBILE FIT (added) ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+img,video{max-width:100%}
+@media(max-width:760px){input,select,textarea{font-size:16px!important}} /* stops iOS zoom-on-focus */
+
+@media(max-width:600px){
+  .topbar{gap:10px}
+  .brand{min-width:0;gap:10px}
+  .brand-icon{flex:none}
+  .brand h1{font-size:16px;line-height:1.15}
+  .nav{gap:6px;flex:none}
+  .nav a{padding:8px 12px;font-size:13px}
+  .search{min-width:0;flex:1 1 100%;max-width:none}
+  .toast{left:12px;right:12px;bottom:12px;min-width:0;max-width:none}
+}
+@media(max-width:440px){.nav .lbl{display:none}}
 </style>
 </head>
 <body>
@@ -155,7 +172,7 @@ tr.low .pct b{color:var(--red)}
     <div><h1>Smart Attendance</h1><p>Admin Console</p></div>
   </div>
   <nav class="nav">
-    <a href="/admin"><svg class="i"><use href="#i-back"/></svg>Dashboard</a>
+    <a href="/admin" aria-label="Dashboard"><svg class="i"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
     <a href="/logout">Logout</a>
   </nav>
 </header>
