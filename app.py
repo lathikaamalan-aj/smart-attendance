@@ -25,9 +25,14 @@ app.jinja_env.auto_reload = True
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, "attendance.db")
+# On Render, attach a Persistent Disk (e.g. mount path /var/data) and set
+# DATA_DIR=/var/data so the database and face data survive redeploys.
+DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)
+os.makedirs(DATA_DIR, exist_ok=True)
 
-FACE_DIR = os.path.join(BASE_DIR, "faces")
+DATABASE = os.path.join(DATA_DIR, "attendance.db")
+
+FACE_DIR = os.path.join(DATA_DIR, "faces")
 os.makedirs(FACE_DIR, exist_ok=True)
 
 # =========================================================
@@ -87,8 +92,8 @@ def get_face_folder(student_id):
 # FACE RECOGNITION MODEL
 # =========================================================
 
-TRAINER_PATH = os.path.join(BASE_DIR, "trainer.yml")
-FACE_LABELS_PATH = os.path.join(BASE_DIR, "face_labels.json")
+TRAINER_PATH = os.path.join(DATA_DIR, "trainer.yml")
+FACE_LABELS_PATH = os.path.join(DATA_DIR, "face_labels.json")
 
 # Same size + lighting normalisation for training AND recognition
 FACE_SIZE = (200, 200)
@@ -3518,6 +3523,80 @@ def test():
 
 
 # =========================================================
+# DATABASE AUTO-SETUP (creates tables + default admin)
+# =========================================================
+
+def init_db():
+    """Create tables and a default admin if the database is empty."""
+    db = get_db_connection()
+    try:
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                year TEXT,
+                department TEXT,
+                email TEXT,
+                phone TEXT,
+                gender TEXT
+            );
+            CREATE TABLE IF NOT EXISTS timetable (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                year TEXT,
+                department TEXT,
+                day TEXT,
+                time TEXT,
+                subject TEXT,
+                faculty TEXT
+            );
+            CREATE TABLE IF NOT EXISTS attendance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                time TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                status TEXT NOT NULL,
+                marked_at TEXT
+            );
+        """)
+
+        has_admin = db.execute(
+            "SELECT 1 FROM users WHERE role = 'admin' LIMIT 1"
+        ).fetchone()
+
+        if not has_admin:
+            admin_user = os.environ.get("ADMIN_USERNAME", "admin")
+            admin_pass = os.environ.get("ADMIN_PASSWORD", "admin123")
+            db.execute(
+                "INSERT OR IGNORE INTO users (username, password, role) "
+                "VALUES (?, ?, 'admin')",
+                (admin_user, admin_pass)
+            )
+            print("DEFAULT ADMIN CREATED:", admin_user)
+
+        db.commit()
+    finally:
+        db.close()
+
+
+# Module level on purpose: gunicorn (Render) never runs the __main__ block.
+try:
+    init_db()
+    ensure_student_contact_columns()
+except Exception as e:
+    print("DATABASE INIT ERROR:", e)
+
+
+# =========================================================
 # RUN APPLICATION
 # =========================================================
 
@@ -3568,6 +3647,8 @@ if __name__ == "__main__":
     print("KIOSK PAGE:", kiosk_url)
 
     app.run(
+        host=os.environ.get("HOST", "127.0.0.1"),
+        port=int(os.environ.get("PORT", 5000)),
         debug=False,
         use_reloader=False
     )
