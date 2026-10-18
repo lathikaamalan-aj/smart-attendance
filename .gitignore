@@ -4,3 +4,5 @@ _pycache_/
 attendance.db
 faces/
 .env
+.env
+*.db
