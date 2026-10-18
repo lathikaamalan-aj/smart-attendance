@@ -2,246 +2,162 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart Attendance - Face Registration</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registered Faces</title>
 <style>
-:root{
-  --navy:#0a1f44; --navy-3:#1d3f85; --accent:#3b82f6;
-  --ink:#0f1b33; --muted:#64748b; --line:#e2e8f0; --bg:#f4f7fb; --white:#fff;
-  --ok:#16a34a; --err:#dc2626;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%}
-body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
-
-header{background:var(--navy);color:#fff;padding:18px 24px}
-.bar{max-width:1120px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:12px}
-.brand{display:flex;align-items:center;gap:14px;min-width:0}
-.logo{width:44px;height:44px;flex:none;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center}
-.brand h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
-.brand p{font-size:13px;color:#a9b8d8;margin-top:2px}
-.back{color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:9px 16px;border:1px solid rgba(255,255,255,.3);border-radius:10px;white-space:nowrap}
-.back:hover{background:rgba(255,255,255,.12);border-color:#fff}
-
-main{max-width:1120px;margin:0 auto;padding:36px 24px 56px;display:grid;grid-template-columns:1.15fr 1fr;gap:28px;align-items:start}
-main>*{min-width:0}
-.card{background:var(--white);border-radius:20px;padding:26px;border:1px solid var(--line);box-shadow:0 18px 40px -22px rgba(10,31,68,.35)}
-.card h2{font-size:20px;font-weight:800;color:var(--navy)}
-.card .sub{font-size:14px;color:var(--muted);margin-top:4px}
-
-.cam{position:relative;margin-top:20px;aspect-ratio:4/3;background:#050d1f;border-radius:16px;overflow:hidden}
-.cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-.oval{position:absolute;inset:10% 27%;border:3px solid rgba(255,255,255,.8);border-radius:50%;pointer-events:none;transition:border-color .2s}
-.cam.flash .oval{border-color:var(--ok)}
-.status{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(10,31,68,.85);color:#fff;padding:7px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
-
-.btns{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
-.btn{flex:1 1 140px;border:0;cursor:pointer;font:700 15px 'Manrope',sans-serif;padding:14px;border-radius:12px;background:var(--navy);color:#fff;transition:background .2s,transform .1s}
-.btn:hover:not(:disabled){background:var(--navy-3)}
-.btn:active:not(:disabled){transform:scale(.98)}
-.btn:disabled{background:#cbd5e1;cursor:not-allowed}
-.btn.ghost{background:#fff;color:var(--navy);border:1px solid #cbd5e1}
-.btn.ghost:hover:not(:disabled){background:#eef3fb}
-.btn.on{background:var(--ok)}
-
-label{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:20px 0 8px}
-select{width:100%;height:50px;padding:0 14px;font:600 15px 'Manrope',sans-serif;color:var(--ink);background:#f8fafc;border:1px solid var(--line);border-radius:12px;outline:none}
-select:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(59,130,246,.12);background:#fff}
-
-.prog{margin-top:24px;background:#f4f7fb;border:1px solid var(--line);border-radius:14px;padding:14px 16px}
-.prog .row{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--muted)}
-.prog .row b{color:var(--navy);font-size:15px;font-weight:800}
-.track{height:8px;background:#dbe4f3;border-radius:99px;margin-top:10px;overflow:hidden}
-#bar{height:100%;width:0;background:linear-gradient(90deg,var(--navy-3),var(--accent));border-radius:99px;transition:width .3s}
-
-#msg{margin-top:16px;font-size:14px;font-weight:600;padding:12px 14px;border-radius:12px;display:none}
-#msg.show{display:block}
-#msg.ok{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
-#msg.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
-#msg.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
-
-.tips{margin-top:22px;padding-left:18px;font-size:14px;color:var(--muted);line-height:1.8}
-
-@media(max-width:900px){main{grid-template-columns:1fr;padding:24px 16px 40px}}
-@media(max-width:600px){
-  header{padding:14px 16px}
-  .brand h1{font-size:17px}
-  .card{padding:18px;border-radius:16px}
-  select{font-size:16px}
-}
-@media(max-width:400px){.brand p{display:none}.back{padding:8px 12px}}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  :root {
+    --bg: #f3f6fd; --card: #ffffff; --text: #0f172a; --muted: #64748b;
+    --line: #e2e8f0; --primary: #2563eb; --ok: #16a34a; --warn: #d97706; --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b1220; --card: #131c2e; --text: #e5eaf5; --muted: #94a3b8; --line: #243049; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 24px; }
+  a.back { color: var(--primary); text-decoration: none; font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .stat b { display: block; font-size: 26px; }
+  .stat span { color: var(--muted); font-size: 13px; }
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tools input, .tools select { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); font-size: 14px; }
+  .tools input { flex: 1; min-width: 200px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; cursor: pointer; }
+  .card:hover { border-color: var(--primary); }
+  .photo { height: 170px; background: var(--line); display: flex; align-items: center; justify-content: center; font-size: 42px; font-weight: 700; color: var(--muted); }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .info { padding: 12px 14px 14px; }
+  .name { font-weight: 700; margin: 0 0 2px; }
+  .meta { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .registered { background: var(--ok); } .incomplete { background: var(--warn); } .not_registered { background: var(--bad); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+  .modal.open { display: flex; }
+  .box { background: var(--card); border-radius: 14px; max-width: 760px; width: 100%; max-height: 90vh; overflow: auto; padding: 18px; }
+  .box h2 { margin: 0 0 4px; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-top: 14px; }
+  .thumbs img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+  button.close { float: right; border: 0; background: var(--line); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 </style>
 </head>
 <body>
-
-<header>
-  <div class="bar">
-    <div class="brand">
-      <div class="logo">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18c.8-2.4 2.9-3.5 5.5-3.5s4.7 1.1 5.5 3.5"/></svg>
-      </div>
-      <div>
-        <h1>Smart Attendance</h1>
-        <p>Face Registration</p>
-      </div>
-    </div>
-    <a href="/admin" class="back">&larr; Dashboard</a>
+<div class="wrap">
+  <div class="top">
+    <h1>Registered Faces</h1>
+    <a class="back" href="/admin">&larr; Back to dashboard</a>
   </div>
-</header>
 
-<main>
-  <section class="card">
-    <h2>Capture Face</h2>
-    <p class="sub">Choose a student, then capture face samples from the camera.</p>
+  <div class="stats">
+    <div class="stat"><b id="sTotal">0</b><span>Total students</span></div>
+    <div class="stat"><b id="sReg">0</b><span>Face registered</span></div>
+    <div class="stat"><b id="sInc">0</b><span>Incomplete</span></div>
+    <div class="stat"><b id="sSamples">0</b><span>Total samples</span></div>
+  </div>
 
-    <div class="cam" id="cam">
-      <video id="video" autoplay playsinline muted></video>
-      <div class="oval"></div>
-      <div class="status" id="camStatus">Starting camera...</div>
-    </div>
-
-    <div class="btns">
-      <button class="btn" id="capBtn" type="button" disabled>Capture sample</button>
-      <button class="btn ghost" id="autoBtn" type="button" disabled>Auto capture</button>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Student</h2>
-    <p class="sub">Samples are saved to the student's face folder. The model trains automatically after 20.</p>
-
-    <label for="student">Select student</label>
-    <select id="student">
-      <option value="">Choose a student</option>
-      {% for s in students %}
-      <option value="{{ s['student_id'] }}">{{ s['name'] }} &middot; {{ s['student_id'] }} ({{ s['year'] }} {{ s['department'] }})</option>
-      {% endfor %}
+  <div class="tools">
+    <input id="search" type="search" placeholder="Search name or register number">
+    <select id="filter">
+      <option value="all">All</option>
+      <option value="registered">Registered</option>
+      <option value="incomplete">Incomplete</option>
+      <option value="not_registered">Not registered</option>
     </select>
+  </div>
 
-    <div class="prog">
-      <div class="row"><span>Face samples</span><b id="count">0 / 20</b></div>
-      <div class="track"><div id="bar"></div></div>
-    </div>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" style="display:none">No students found.</div>
+</div>
 
-    <div id="msg" role="status"></div>
-
-    <ul class="tips">
-      <li>One person in front of the camera.</li>
-      <li>Keep the face inside the oval, in good light.</li>
-      <li>Turn slightly left, right, up and down between samples.</li>
-    </ul>
-  </section>
-</main>
+<div id="modal" class="modal">
+  <div class="box">
+    <button class="close" id="closeBtn">Close</button>
+    <h2 id="mName"></h2>
+    <div id="mMeta" class="meta"></div>
+    <div id="mThumbs" class="thumbs"></div>
+  </div>
+</div>
 
 <script>
-const REQUIRED = 20;
-const $ = id => document.getElementById(id);
-const video = $("video"), cam = $("cam");
-let samples = 0, busy = false, auto = null, ready = false;
+const REQUIRED = {{ required|tojson }};
+const LABEL = { registered: "Registered", incomplete: "Incomplete", not_registered: "Not registered" };
+let students = [];
 
-function say(text, type){
-  const m = $("msg");
-  m.textContent = text; m.className = "show " + type;
-}
-function setCount(n){
-  samples = n;
-  $("count").textContent = n + " / " + REQUIRED;
-  $("bar").style.width = Math.min(100, n / REQUIRED * 100) + "%";
-}
-function refreshButtons(){
-  const ok = ready && $("student").value && samples < REQUIRED && !busy;
-  $("capBtn").disabled = !ok;
-  $("autoBtn").disabled = !(ready && $("student").value && samples < REQUIRED);
+function esc(t) {
+  return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
 }
 
-async function startCamera(){
-  try{
-    video.srcObject = await navigator.mediaDevices.getUserMedia({
-      video:{width:{ideal:640}, height:{ideal:480}, facingMode:"user"}, audio:false
-    });
-    ready = true;
-    $("camStatus").textContent = "Camera ready";
-    refreshButtons();
-  }catch(e){
-    $("camStatus").textContent = "Camera access denied";
-    say("Allow camera permission in the browser, then refresh the page.", "err");
+function render() {
+  const q = document.getElementById("search").value.trim().toLowerCase();
+  const f = document.getElementById("filter").value;
+  const list = students.filter(function (s) {
+    const hit = !q || s.name.toLowerCase().includes(q) || s.student_id.toLowerCase().includes(q);
+    return hit && (f === "all" || s.status === f);
+  });
+
+  document.getElementById("empty").style.display = list.length ? "none" : "block";
+  document.getElementById("grid").innerHTML = list.map(function (s) {
+    const photo = s.photo
+      ? '<img src="' + esc(s.photo) + '" alt="" loading="lazy">'
+      : esc((s.name || "?").charAt(0).toUpperCase());
+    return '<div class="card" data-id="' + esc(s.student_id) + '">' +
+      '<div class="photo">' + photo + '</div>' +
+      '<div class="info"><p class="name">' + esc(s.name) + '</p>' +
+      '<p class="meta">' + esc(s.student_id) + ' &middot; ' + esc(s.year) + ' ' + esc(s.department) + '</p>' +
+      '<span class="badge ' + s.status + '">' + LABEL[s.status] + ' (' + s.samples + '/' + REQUIRED + ')</span>' +
+      '</div></div>';
+  }).join("");
+}
+
+async function load() {
+  const res = await fetch("/api/registered_faces", { credentials: "same-origin" });
+  const data = await res.json();
+  if (!data.success) {
+    document.getElementById("empty").textContent = data.message || "Could not load faces.";
+    document.getElementById("empty").style.display = "block";
+    return;
   }
+  students = data.students;
+  document.getElementById("sTotal").textContent = data.summary.total_students;
+  document.getElementById("sReg").textContent = data.summary.registered;
+  document.getElementById("sInc").textContent = data.summary.incomplete;
+  document.getElementById("sSamples").textContent = data.summary.total_samples;
+  render();
 }
 
-function frame(){
-  const c = document.createElement("canvas");
-  c.width = video.videoWidth; c.height = video.videoHeight;
-  c.getContext("2d").drawImage(video, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", 0.9);
+async function openStudent(id) {
+  const res = await fetch("/api/registered_faces/" + encodeURIComponent(id), { credentials: "same-origin" });
+  const d = await res.json();
+  if (!d.success) return;
+  document.getElementById("mName").textContent = d.name;
+  document.getElementById("mMeta").textContent =
+    d.student_id + " \u00b7 " + d.year + " " + d.department + " \u00b7 " + d.samples + "/" + d.required + " samples";
+  document.getElementById("mThumbs").innerHTML = d.images.length
+    ? d.images.map(function (i) { return '<img src="' + esc(i.url) + '" alt="Sample ' + i.number + '" loading="lazy">'; }).join("")
+    : '<div class="empty" style="grid-column:1/-1">No face samples yet.</div>';
+  document.getElementById("modal").classList.add("open");
 }
 
-async function capture(){
-  if (busy || !video.videoWidth) return false;
-  const id = $("student").value;
-  if (!id) { say("Select a student first.", "err"); return false; }
-  busy = true; refreshButtons();
-  let keepGoing = false;
-  try{
-    const res = await fetch("/capture_face", {
-      method:"POST", credentials:"same-origin",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({student_id:id, image:frame()})
-    });
-    const d = await res.json().catch(() => ({success:false, message:"Server error (HTTP " + res.status + ")."}));
-    if (d.success){
-      setCount(d.image_number);
-      cam.classList.add("flash"); setTimeout(() => cam.classList.remove("flash"), 180);
-      say(d.completed ? "All " + REQUIRED + " samples captured. Face model trained." : d.message, d.completed ? "ok" : "info");
-      keepGoing = !d.completed;
-    } else {
-      say(d.message || "Capture failed.", "err");
-      if (/Maximum/.test(d.message || "")) setCount(REQUIRED);
-    }
-  }catch(e){
-    say("Unable to reach the server.", "err");
-  }
-  busy = false; refreshButtons();
-  return keepGoing;
-}
+document.getElementById("search").addEventListener("input", render);
+document.getElementById("filter").addEventListener("change", render);
+document.getElementById("grid").addEventListener("click", function (e) {
+  const card = e.target.closest(".card");
+  if (card) openStudent(card.dataset.id);
+});
+document.getElementById("closeBtn").addEventListener("click", function () {
+  document.getElementById("modal").classList.remove("open");
+});
+document.getElementById("modal").addEventListener("click", function (e) {
+  if (e.target.id === "modal") e.currentTarget.classList.remove("open");
+});
 
-function stopAuto(){
-  if (auto){ clearInterval(auto); auto = null; }
-  $("autoBtn").textContent = "Auto capture"; $("autoBtn").classList.remove("on");
-}
-function startAuto(){
-  $("autoBtn").textContent = "Stop auto capture"; $("autoBtn").classList.add("on");
-  auto = setInterval(async () => {
-    if (busy) return;
-    const more = await capture();
-    if (!more) stopAuto();
-  }, 900);
-}
-
-$("capBtn").onclick = capture;
-$("autoBtn").onclick = () => auto ? stopAuto() : startAuto();
-
-$("student").onchange = async () => {
-  stopAuto(); setCount(0);
-  $("msg").className = "";
-  const id = $("student").value;
-  if (id){
-    try{
-      const res = await fetch("/api/registered_faces/" + encodeURIComponent(id), {credentials:"same-origin"});
-      const d = await res.json();
-      if (d.success){
-        setCount(d.samples);
-        if (d.samples >= REQUIRED) say("This student already has all " + REQUIRED + " samples.", "info");
-        else if (d.samples > 0) say(d.samples + " samples already saved. Continue capturing.", "info");
-      }
-    }catch(e){}
-  }
-  refreshButtons();
-};
-
-window.addEventListener("DOMContentLoaded", startCamera);
+load();
 </script>
 </body>
 </html>

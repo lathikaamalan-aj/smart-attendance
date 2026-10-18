@@ -4,7 +4,6 @@ import os
 import re
 from datetime import datetime
 import cv2
-from PIL import Image
 import base64
 import numpy as np
 import json
@@ -12,10 +11,14 @@ import hmac
 import threading
 import webbrowser
 from db import connect
-from dotenv import load_dotenv
-load_dotenv()
 
-print("DB URL STARTS WITH:", os.environ.get("DATABASE_URL", "NOT SET")[:40])
+# Local development only: reads a .env file if python-dotenv is installed.
+# On Render the real Environment variables are used, so this is optional.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
@@ -31,10 +34,11 @@ app.jinja_env.auto_reload = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # On Render, attach a Persistent Disk (e.g. mount path /var/data) and set
-# DATA_DIR=/var/data so the database and face data survive redeploys.
+# DATA_DIR=/var/data so the face data survives redeploys.
 DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Only used when DATABASE_URL is NOT set (local SQLite fallback).
 DATABASE = os.path.join(DATA_DIR, "attendance.db")
 
 FACE_DIR = os.path.join(DATA_DIR, "faces")
@@ -66,6 +70,7 @@ print("FACE CASCADE LOADED:", FACE_CASCADE_PATH)
 
 # =========================================================
 # DATABASE CONNECTION
+# (db.py uses Postgres when DATABASE_URL is set, else SQLite)
 # =========================================================
 
 def get_db_connection():
@@ -179,6 +184,8 @@ def train_face_model():
         json.dump(label_map, f, indent=4)
 
     return True, f"Face model trained with {len(faces)} images."
+
+
 # =========================================================
 # LOGIN
 # =========================================================
@@ -710,10 +717,7 @@ def upload_students_csv():
                 "message": "CSV file must contain student data."
             }), 400
 
-        # -----------------------------------------
         # CHECK HEADERS
-        # -----------------------------------------
-
         headers = [
             str(h).strip().lower().replace(" ", "_")
             for h in rows[0]
@@ -743,10 +747,7 @@ def upload_students_csv():
         skipped = 0
         errors = []
 
-        # -----------------------------------------
         # INSERT STUDENTS
-        # -----------------------------------------
-
         for row_number, row in enumerate(rows[1:], start=2):
 
             if not row or not any(str(cell).strip() for cell in row):
@@ -861,6 +862,7 @@ def upload_students_csv():
             "message": str(e)
         }), 500
 
+
 # =========================================================
 # ADD SINGLE STUDENT
 # =========================================================
@@ -885,10 +887,7 @@ def add_student():
         year = str(data.get("year", "")).strip()
         department = str(data.get("department", "")).strip()
 
-        # -----------------------------
         # VALIDATION
-        # -----------------------------
-
         if not all([
             student_id,
             name,
@@ -904,13 +903,7 @@ def add_student():
 
         db = get_db_connection()
 
-        print("DATABASE USED:", DATABASE)
-        print("DATABASE EXISTS:", os.path.exists(DATABASE))
-
-        # -----------------------------
         # CHECK STUDENT ID
-        # -----------------------------
-
         existing_student = db.execute("""
             SELECT id
             FROM students
@@ -925,10 +918,7 @@ def add_student():
                 "message": "Student ID already exists."
             }), 400
 
-        # -----------------------------
         # CHECK USERNAME
-        # -----------------------------
-
         existing_user = db.execute("""
             SELECT id
             FROM users
@@ -943,10 +933,7 @@ def add_student():
                 "message": "Username already exists."
             }), 400
 
-        # -----------------------------
         # INSERT STUDENT
-        # -----------------------------
-
         db.execute("""
             INSERT INTO students
             (
@@ -967,10 +954,7 @@ def add_student():
             department
         ))
 
-        # -----------------------------
         # INSERT LOGIN ACCOUNT
-        # -----------------------------
-
         db.execute("""
             INSERT INTO users
             (
@@ -1001,6 +985,8 @@ def add_student():
             "success": False,
             "message": str(e)
         }), 500
+
+
 # =========================================================
 # VIEW STUDENTS PAGE
 # =========================================================
@@ -1113,10 +1099,7 @@ def update_student():
         year = data.get("year", "").strip()
         department = data.get("department", "").strip()
 
-        # -----------------------------------------
         # VALIDATION
-        # -----------------------------------------
-
         if not student_db_id:
 
             return jsonify({
@@ -1133,10 +1116,7 @@ def update_student():
 
         db = get_db_connection()
 
-        # -----------------------------------------
         # FIND EXISTING STUDENT
-        # -----------------------------------------
-
         student = db.execute("""
             SELECT *
             FROM students
@@ -1154,10 +1134,7 @@ def update_student():
 
         old_username = student["username"]
 
-        # -----------------------------------------
         # CHECK USERNAME
-        # -----------------------------------------
-
         existing_user = db.execute("""
             SELECT *
             FROM users
@@ -1173,10 +1150,7 @@ def update_student():
                 "message": "Username already exists."
             }), 400
 
-        # -----------------------------------------
         # UPDATE STUDENTS TABLE
-        # -----------------------------------------
-
         db.execute("""
             UPDATE students
             SET
@@ -1193,10 +1167,7 @@ def update_student():
             student_db_id
         ))
 
-        # -----------------------------------------
         # UPDATE USERS TABLE
-        # -----------------------------------------
-
         db.execute("""
             UPDATE users
             SET username = ?
@@ -1257,10 +1228,7 @@ def delete_student():
 
         db = get_db_connection()
 
-        # -----------------------------------------
         # FIND STUDENT
-        # -----------------------------------------
-
         student = db.execute("""
             SELECT *
             FROM students
@@ -1279,19 +1247,13 @@ def delete_student():
         username = student["username"]
         name = student["name"]
 
-        # -----------------------------------------
         # DELETE STUDENT
-        # -----------------------------------------
-
         db.execute("""
             DELETE FROM students
             WHERE id = ?
         """, (student_db_id,))
 
-        # -----------------------------------------
         # DELETE LOGIN ACCOUNT
-        # -----------------------------------------
-
         db.execute("""
             DELETE FROM users
             WHERE username = ?
@@ -1317,8 +1279,6 @@ def delete_student():
             "success": False,
             "message": str(e)
         }), 500
-
-
 
 
 # =========================================================
@@ -1468,7 +1428,8 @@ def get_students():
             "success": False,
             "message": str(e)
         }), 500
-    
+
+
 @app.route("/api/manual_periods")
 def manual_periods():
     """Return periods from the uploaded timetable for date + year + department."""
@@ -1754,6 +1715,7 @@ def save_attendance():
             "message": str(e)
         }), 500
 
+
 # =========================================================
 # UPLOAD TIMETABLE PAGE
 # =========================================================
@@ -1912,7 +1874,7 @@ def representative():
 
 
 # ------------------------------------------------------------
-# /student — renders the dashboard for the logged-in student
+# /student - renders the dashboard for the logged-in student
 # ------------------------------------------------------------
 @app.route("/student")
 def student():
@@ -2167,6 +2129,8 @@ def api_attendance_report():
 
     finally:
         db.close()
+
+
 @app.route("/train_faces", methods=["POST"])
 def train_faces():
 
@@ -2194,6 +2158,7 @@ def train_faces():
             "message": str(e)
         }), 500
 
+
 # ------------------------------------------------------------
 # /logout
 # ------------------------------------------------------------
@@ -2204,6 +2169,8 @@ def logout():
     session.clear()
 
     return redirect(url_for("login"))
+
+
 # =========================================================
 # RECOGNIZE FACE
 # =========================================================
@@ -2212,29 +2179,12 @@ def recognize_face(frame):
     """
     Recognize a face.
 
-    Returns:
-        (student_dict, confidence, error)
-
-    Example success:
-        (
-            {
-                "student_id": "...",
-                "name": "...",
-                "year": "...",
-                "department": "..."
-            },
-            42.5,
-            None
-        )
-
-    Example failure:
+    Returns (student_dict, confidence, error), e.g.
+        ({"student_id": "...", "name": "...", "year": "...", "department": "..."}, 42.5, None)
         (None, 72.3, "Unknown face.")
     """
 
-    # -----------------------------------------------------
     # CHECK MODEL FILES
-    # -----------------------------------------------------
-
     if not os.path.exists(TRAINER_PATH):
         return None, None, "Face model not trained."
 
@@ -2243,10 +2193,7 @@ def recognize_face(frame):
 
     try:
 
-        # -------------------------------------------------
         # LOAD LABEL MAP
-        # -------------------------------------------------
-
         with open(
             FACE_LABELS_PATH,
             "r",
@@ -2254,33 +2201,21 @@ def recognize_face(frame):
         ) as f:
             label_map = json.load(f)
 
-        # -------------------------------------------------
         # LOAD LBPH MODEL
-        # -------------------------------------------------
-
         recognizer = cv2.face.LBPHFaceRecognizer_create()
         recognizer.read(TRAINER_PATH)
 
-        # -------------------------------------------------
         # VALIDATE FRAME
-        # -------------------------------------------------
-
         if frame is None:
             return None, None, "Invalid camera frame."
 
-        # -------------------------------------------------
         # CONVERT TO GRAYSCALE
-        # -------------------------------------------------
-
         gray = cv2.cvtColor(
             frame,
             cv2.COLOR_BGR2GRAY
         )
 
-        # -------------------------------------------------
         # DETECT FACE
-        # -------------------------------------------------
-
         faces = face_cascade.detectMultiScale(
             gray,
             scaleFactor=1.2,
@@ -2291,10 +2226,7 @@ def recognize_face(frame):
         if len(faces) == 0:
             return None, None, "No face detected."
 
-        # -------------------------------------------------
         # USE LARGEST FACE
-        # -------------------------------------------------
-
         x, y, w, h = max(
             faces,
             key=lambda item: item[2] * item[3]
@@ -2308,10 +2240,7 @@ def recognize_face(frame):
         if face.size == 0:
             return None, None, "Invalid face region."
 
-        # -------------------------------------------------
         # LBPH PREDICTION
-        # -------------------------------------------------
-
         face = preprocess_face(face)
 
         label, confidence = recognizer.predict(face)
@@ -2324,10 +2253,7 @@ def recognize_face(frame):
             f"confidence={confidence:.2f}"
         )
 
-        # -------------------------------------------------
         # GET STUDENT ID FROM LABEL
-        # -------------------------------------------------
-
         student_id = label_map.get(
             str(label)
         )
@@ -2339,11 +2265,7 @@ def recognize_face(frame):
                 "Unknown face."
             )
 
-        # -------------------------------------------------
-        # LBPH:
-        # LOWER CONFIDENCE = BETTER MATCH
-        # -------------------------------------------------
-
+        # LBPH: LOWER CONFIDENCE = BETTER MATCH
         if confidence > CONFIDENCE_THRESHOLD:
             return (
                 None,
@@ -2351,10 +2273,7 @@ def recognize_face(frame):
                 "Unknown face."
             )
 
-        # -------------------------------------------------
         # FIND STUDENT IN DATABASE
-        # -------------------------------------------------
-
         db = get_db_connection()
 
         try:
@@ -2376,10 +2295,7 @@ def recognize_face(frame):
         finally:
             db.close()
 
-        # -------------------------------------------------
         # STUDENT NOT FOUND
-        # -------------------------------------------------
-
         if not student:
             return (
                 None,
@@ -2387,10 +2303,7 @@ def recognize_face(frame):
                 "Student not found."
             )
 
-        # -------------------------------------------------
         # SUCCESS
-        # -------------------------------------------------
-
         student_data = {
             "student_id": student["student_id"],
             "name": student["name"],
@@ -2446,17 +2359,9 @@ def _time_to_minutes(hour, minute, ampm=None):
     """
     Convert time to minutes since midnight.
 
-    Supports:
-
-        09:00
-        09:00 AM
-        01:30 PM
-        13:30
-
+    Supports 09:00, 09:00 AM, 01:30 PM, 13:30.
     For timetable values without AM/PM:
-        1-7 = afternoon/evening
-        8-12 = morning
-        13+ = 24-hour format
+        1-7 = afternoon/evening, 8-12 = morning, 13+ = 24-hour format
     """
 
     hour = int(hour)
@@ -2467,10 +2372,6 @@ def _time_to_minutes(hour, minute, ampm=None):
         .strip()
         .lower()
     )
-
-    # -----------------------------------------------------
-    # AM / PM PROVIDED
-    # -----------------------------------------------------
 
     if ampm:
 
@@ -2484,10 +2385,6 @@ def _time_to_minutes(hour, minute, ampm=None):
             if hour == 12:
                 hour = 0
 
-    # -----------------------------------------------------
-    # AM / PM NOT PROVIDED
-    # -----------------------------------------------------
-
     else:
 
         # 24-hour format
@@ -2498,8 +2395,7 @@ def _time_to_minutes(hour, minute, ampm=None):
         elif hour == 0:
             hour = 0
 
-        # College timetable:
-        # 1-7 means afternoon
+        # College timetable: 1-7 means afternoon
         elif 1 <= hour <= 7:
             hour += 12
 
@@ -2518,14 +2414,8 @@ def _parse_timetable_range(value):
     Parse timetable period.
 
     Supported:
-
-        09:00 AM - 10:00 AM
-        9:00 AM-10:00 AM
-        01:30 PM - 02:20 PM
-        09:00-09:50
-        1:30-2:20
-        13:30-14:20
-        01:30-02:20 PM
+        09:00 AM - 10:00 AM, 9:00 AM-10:00 AM, 01:30 PM - 02:20 PM,
+        09:00-09:50, 1:30-2:20, 13:30-14:20, 01:30-02:20 PM
     """
 
     text = str(
@@ -2559,20 +2449,14 @@ def _parse_timetable_range(value):
     em = int(match.group(5))
     eap = match.group(6)
 
-    # -----------------------------------------------------
     # IF ONLY END HAS AM/PM
-    # -----------------------------------------------------
-
     if not sap and eap:
 
         eap_upper = eap.upper()
 
         if eap_upper == "PM":
 
-            # Example:
-            # 01:30 - 02:20 PM
-            #
-            # Start should also be PM.
+            # 01:30 - 02:20 PM -> start should also be PM.
             if sh <= 7:
                 sap = "PM"
             else:
@@ -2581,10 +2465,7 @@ def _parse_timetable_range(value):
         else:
             sap = "AM"
 
-    # -----------------------------------------------------
     # CONVERT
-    # -----------------------------------------------------
-
     start_minutes = _time_to_minutes(
         sh,
         sm,
@@ -2597,16 +2478,11 @@ def _parse_timetable_range(value):
         eap
     )
 
-    # -----------------------------------------------------
-    # HANDLE COLLEGE TIME WITHOUT AM/PM
-    # -----------------------------------------------------
-
+    # HANDLE COLLEGE TIME WITHOUT AM/PM (e.g. 1:30-2:20)
     if end_minutes <= start_minutes:
 
         if not eap:
 
-            # Example:
-            # 1:30-2:20
             if 1 <= eh <= 7:
 
                 possible_end = (
@@ -2617,10 +2493,7 @@ def _parse_timetable_range(value):
                 if possible_end > start_minutes:
                     end_minutes = possible_end
 
-    # -----------------------------------------------------
     # INVALID RANGE
-    # -----------------------------------------------------
-
     if end_minutes <= start_minutes:
         return None
 
@@ -2675,17 +2548,11 @@ def _find_current_timetable_period(
         except Exception:
             pass
 
-        # -------------------------------------------------
         # YEAR CHECK
-        # -------------------------------------------------
-
         if normalize_year(row_year) != wanted_year:
             continue
 
-        # -------------------------------------------------
         # TIME CHECK
-        # -------------------------------------------------
-
         try:
             time_value = row["time"]
         except Exception:
@@ -2700,10 +2567,7 @@ def _find_current_timetable_period(
 
         start_minutes, end_minutes = parsed
 
-        # -------------------------------------------------
         # CURRENT PERIOD
-        # -------------------------------------------------
-
         if (
             start_minutes
             <= current_minutes
@@ -2731,10 +2595,7 @@ def _find_current_timetable_period(
 )
 def api_recognize_face():
 
-    # -----------------------------------------------------
     # ROLE CHECK
-    # -----------------------------------------------------
-
     if not kiosk_or_staff():
 
         return jsonify({
@@ -2747,10 +2608,7 @@ def api_recognize_face():
 
     try:
 
-        # =================================================
         # GET JSON
-        # =================================================
-
         data = request.get_json(
             silent=True
         ) or {}
@@ -2768,10 +2626,7 @@ def api_recognize_face():
                 "message": "Image is required."
             }), 400
 
-        # =================================================
         # REMOVE BASE64 HEADER
-        # =================================================
-
         if "," in image_data:
 
             image_data = image_data.split(
@@ -2779,10 +2634,7 @@ def api_recognize_face():
                 1
             )[1]
 
-        # =================================================
         # DECODE IMAGE
-        # =================================================
-
         try:
 
             image_bytes = base64.b64decode(
@@ -2816,24 +2668,8 @@ def api_recognize_face():
                 "message": "Invalid image."
             }), 400
 
-        # =================================================
         # RECOGNIZE FACE
-        # =================================================
-        #
-        # IMPORTANT:
-        #
-        # recognize_face() returns:
-        #
-        #     student, confidence, error
-        #
-        # NOT a dictionary.
-        #
-        # DO NOT use:
-        #
-        #     result.get(...)
-        #
-        # =================================================
-
+        # recognize_face() returns (student, confidence, error), NOT a dict.
         student, confidence, error = recognize_face(
             frame
         )
@@ -2845,10 +2681,7 @@ def api_recognize_face():
             error
         )
 
-        # =================================================
         # RECOGNITION ERROR
-        # =================================================
-
         if error:
 
             return jsonify({
@@ -2858,10 +2691,7 @@ def api_recognize_face():
                 "confidence": confidence
             }), 200
 
-        # =================================================
         # NO STUDENT
-        # =================================================
-
         if not student:
 
             return jsonify({
@@ -2871,10 +2701,7 @@ def api_recognize_face():
                 "confidence": confidence
             }), 200
 
-        # =================================================
         # STUDENT DETAILS
-        # =================================================
-
         student_id = str(
             student["student_id"]
         )
@@ -2900,10 +2727,7 @@ def api_recognize_face():
             )
         )
 
-        # =================================================
         # CURRENT DATE / TIME
-        # =================================================
-
         now = datetime.now()
 
         today = now.strftime(
@@ -2923,10 +2747,7 @@ def api_recognize_face():
             + now.minute
         )
 
-        # =================================================
         # DEFAULT ATTENDANCE RESPONSE
-        # =================================================
-
         attendance_marked = False
 
         attendance_status = None
@@ -2937,16 +2758,10 @@ def api_recognize_face():
 
         attendance_time = None
 
-        # =================================================
         # DATABASE
-        # =================================================
-
         db = get_db_connection()
 
-        # =================================================
         # CREATE ATTENDANCE TABLE IF REQUIRED
-        # =================================================
-
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS attendance (
@@ -2963,10 +2778,7 @@ def api_recognize_face():
 
         db.commit()
 
-        # =================================================
         # FIND CURRENT TIMETABLE PERIOD
-        # =================================================
-
         current_period = (
             _find_current_timetable_period(
                 db,
@@ -2977,10 +2789,7 @@ def api_recognize_face():
             )
         )
 
-        # =================================================
         # NO ACTIVE PERIOD
-        # =================================================
-
         if current_period is None:
 
             attendance_message = (
@@ -2988,10 +2797,7 @@ def api_recognize_face():
                 "timetable period found."
             )
 
-        # =================================================
         # ACTIVE PERIOD FOUND
-        # =================================================
-
         else:
 
             attendance_subject = str(
@@ -3002,10 +2808,7 @@ def api_recognize_face():
                 current_period["time"]
             ).strip()
 
-            # ---------------------------------------------
             # CHECK EXISTING ATTENDANCE
-            # ---------------------------------------------
-
             existing = db.execute(
                 """
                 SELECT
@@ -3030,20 +2833,14 @@ def api_recognize_face():
                 )
             ).fetchone()
 
-            # ---------------------------------------------
             # ALREADY EXISTS
-            # ---------------------------------------------
-
             if existing:
 
                 existing_status = str(
                     existing["status"] or ""
                 ).strip().lower()
 
-                # -----------------------------------------
                 # ALREADY PRESENT
-                # -----------------------------------------
-
                 if existing_status == "present":
 
                     attendance_marked = True
@@ -3055,10 +2852,7 @@ def api_recognize_face():
                         f"for {attendance_subject}."
                     )
 
-                # -----------------------------------------
                 # EXISTING ABSENT -> PRESENT
-                # -----------------------------------------
-
                 else:
 
                     db.execute(
@@ -3089,10 +2883,7 @@ def api_recognize_face():
                         f"Present for {attendance_subject}."
                     )
 
-            # ---------------------------------------------
             # NO EXISTING RECORD -> INSERT PRESENT
-            # ---------------------------------------------
-
             else:
 
                 db.execute(
@@ -3131,10 +2922,7 @@ def api_recognize_face():
                     f"for {attendance_subject}."
                 )
 
-        # =================================================
         # FINAL RESPONSE
-        # =================================================
-
         return jsonify({
 
             "success": True,
@@ -3180,10 +2968,7 @@ def api_recognize_face():
             "date": today
         })
 
-    # =====================================================
     # ERROR
-    # =====================================================
-
     except Exception as e:
 
         if db is not None:
@@ -3204,10 +2989,7 @@ def api_recognize_face():
             "message": str(e)
         }), 500
 
-    # =====================================================
     # CLOSE DB
-    # =====================================================
-
     finally:
 
         if db is not None:
@@ -3616,32 +3398,12 @@ if __name__ == "__main__":
             e
         )
 
-    print(
-        "========================================"
-    )
-
-    print(
-        "SMART ATTENDANCE SERVER STARTING"
-    )
-
-    print(
-        "DATABASE:",
-        DATABASE
-    )
-
-    print(
-        "TRAINER:",
-        TRAINER_PATH
-    )
-
-    print(
-        "FACE LABELS:",
-        FACE_LABELS_PATH
-    )
-
-    print(
-        "========================================"
-    )
+    print("========================================")
+    print("SMART ATTENDANCE SERVER STARTING")
+    print("DATABASE:", os.environ.get("DATABASE_URL") and "PostgreSQL (DATABASE_URL)" or DATABASE)
+    print("TRAINER:", TRAINER_PATH)
+    print("FACE LABELS:", FACE_LABELS_PATH)
+    print("========================================")
 
     # Auto-open the kiosk page (camera + scanning start by themselves)
     # 1.5 s after the server starts.
