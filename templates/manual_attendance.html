@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance - Manual Attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0a1f44;--navy-2:#102a5c;--navy-3:#1d3f85;--accent:#3b82f6;--ink:#0f1b33;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb;--tint:#eaf0fb}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button{font-family:inherit}
+
+.topbar{background:var(--navy);color:#fff;height:72px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 6px 20px -8px rgba(10,31,68,.5)}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.brand-icon{flex:none;width:42px;height:42px;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:16px}
+.brand h1{font-size:19px;font-weight:800}
+.brand p{font-size:12px;color:#a9b8d8;margin-top:2px}
+.top-actions{display:flex;align-items:center;gap:10px}
+.logout-btn{text-decoration:none;display:inline-block;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;padding:9px 18px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;transition:background .2s,border-color .2s}
+.logout-btn:hover{background:rgba(255,255,255,.12);border-color:#fff}
+
+.hero{background:var(--navy);color:#fff;padding:30px 32px 70px}
+.hero-in{max-width:1000px;margin:0 auto}
+.hero h2{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.hero p{margin-top:8px;color:#b8c6e3;max-width:600px;line-height:1.6;font-size:15px}
+
+.container{max-width:1000px;margin:-44px auto 56px;padding:0 24px;position:relative}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:28px;box-shadow:0 10px 26px -18px rgba(10,31,68,.45)}
+
+.form-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.field label{display:block;font-size:13px;font-weight:700;color:#41536f;margin-bottom:7px}
+.field input,.field select{width:100%;height:44px;border:1px solid #d5e0ee;border-radius:10px;padding:0 12px;font:inherit;font-size:14px;background:#fff;outline:none;transition:border-color .2s,box-shadow .2s}
+.field input:focus,.field select:focus{border-color:var(--navy-3);box-shadow:0 0 0 4px rgba(29,63,133,.12)}
+.btn{border:0;background:var(--navy);color:#fff;padding:12px 22px;border-radius:11px;cursor:pointer;font-weight:700;font-size:14px;transition:background .2s,transform .15s,box-shadow .2s}
+.btn:hover{background:var(--navy-3);box-shadow:0 10px 20px -10px rgba(10,31,68,.7)}
+.btn:active{transform:scale(.97)}
+.load-btn,.save-btn{margin-top:20px}
+.student-list{margin-top:26px;animation:rise .4s both}
+.student-list h3{color:var(--navy);margin-bottom:12px;font-size:16px}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;max-height:420px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{background:var(--navy);color:#fff;padding:12px 14px;text-align:left;font-weight:600;position:sticky;top:0}
+td{padding:10px 14px;border-bottom:1px solid #edf1f6}
+tbody tr:hover{background:#f4f7fb}
+.status-select{border:1px solid #d6e0ec;padding:7px 10px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;transition:background .2s,color .2s,border-color .2s}
+.status-select.Present{background:#ecfdf3;color:#15803d;border-color:#bbf0d0}
+.status-select.Absent{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+.toast{position:fixed;right:24px;bottom:24px;min-width:280px;max-width:90vw;padding:15px 18px 15px 20px;background:var(--navy);color:#fff;border-radius:12px;border-left:4px solid var(--accent);box-shadow:0 14px 34px rgba(0,0,0,.28);transform:translateY(100px);opacity:0;transition:.35s cubic-bezier(.2,.8,.2,1);z-index:2000;font-size:14px;font-weight:600}
+.toast.show{transform:none;opacity:1}
+
+@media(max-width:760px){input,select,textarea{font-size:16px!important}.form-grid{grid-template-columns:1fr}}
+@media(max-width:600px){.topbar{padding:0 16px}.brand p{display:none}.hero{padding:24px 16px 64px}.hero h2{font-size:24px}.container{padding:0 14px}.card{padding:20px 16px}.toast{left:12px;right:12px;bottom:12px;min-width:0;max-width:none}}
+@media(prefers-reduced-motion:reduce){*,*::before{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">SA</div>
+    <div><h1>Smart Attendance</h1><p>Manual Attendance</p></div>
+  </div>
+  <div class="top-actions">
+    <a class="logout-btn" href="/admin">&larr; Dashboard</a>
+    <a class="logout-btn" href="/logout">Logout</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-in">
+    <h2>Manual Attendance</h2>
+    <p>Mark student attendance manually based on date, period and subject. Use this when face recognition is unavailable or attendance needs to be corrected.</p>
+  </div>
+</section>
+
+<main class="container">
+  <div class="card">
+    <div class="form-grid">
+      <div class="field"><label for="attendance-date">Date</label><input type="date" id="attendance-date"></div>
+      <div class="field"><label for="attendance-year">Year</label>
+        <select id="attendance-year"><option value="">Select Year</option><option value="I">1st Year</option><option value="II">2nd Year</option><option value="III">3rd Year</option><option value="IV">4th Year</option></select></div>
+      <div class="field"><label for="attendance-department">Department</label>
+        <select id="attendance-department"><option value="">Select Department</option><option value="CSE">CSE</option><option value="ECE">ECE</option><option value="EEE">EEE</option><option value="MECH">MECH</option><option value="CIVIL">CIVIL</option><option value="MTZ">MTZ</option></select></div>
+      <div class="field"><label for="attendance-subject">Subject</label>
+        <select id="attendance-subject"><option value="">Select Subject</option></select></div>
+      <div class="field"><label for="attendance-period">Period</label>
+        <select id="attendance-period"><option value="">Select Period</option></select></div>
+    </div>
+
+    <div class="student-list" id="timetable-preview" style="display:none; margin-top:16px;">
+      <h3 id="timetable-title">Timetable</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Day</th><th>Time</th><th>Subject</th><th>Faculty</th></tr></thead>
+          <tbody id="timetable-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="btn load-btn" id="load-students">Load Students</button>
+
+    <div class="student-list" id="student-list" style="display:none;">
+      <h3>Student Roster</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Student ID</th><th>Name</th><th>Status</th></tr></thead>
+          <tbody id="students-body"></tbody>
+        </table>
+      </div>
+      <button class="btn save-btn" id="save-attendance">Save Attendance</button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  let toastTimer;
+  function showToast(message) {
+    const t = $("toast");
+    t.textContent = message;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+  }
+
+  // default the date to today
+  const dateInput = $("attendance-date");
+  if (!dateInput.value) dateInput.value = new Date().toISOString().split("T")[0];
+
+  /* subjects: Date/Year/Department -> ALL subjects for Year + Department */
+  const q = encodeURIComponent;
+
+  function clearManualRoster() {
+    $("student-list").style.display = "none";
+    $("students-body").innerHTML = "";
+  }
+
+  function clearTimetablePreview() {
+    $("timetable-preview").style.display = "none";
+    $("timetable-body").innerHTML = "";
+  }
+
+  async function loadTimetable() {
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    clearTimetablePreview();
+
+    if (!year || !department) return;
+
+    try {
+      const res = await fetch(`/api/admin_timetable?year=${q(year)}&department=${q(department)}`);
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Unable to load timetable.");
+      }
+
+      const rows = data.timetable || [];
+      const tbody = $("timetable-body");
+      tbody.innerHTML = "";
+
+      rows.forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${esc(row.day || "")}</td>
+                        <td>${esc(row.time || "")}</td>
+                        <td>${esc(row.subject || "")}</td>
+                        <td>${esc(row.faculty || "-")}</td>`;
+        tbody.appendChild(tr);
+      });
+
+      $("timetable-title").textContent = `${year} Year - ${department} Timetable (${rows.length} periods)`;
+      $("timetable-preview").style.display = rows.length ? "block" : "none";
+
+      if (!rows.length) {
+        showToast("No timetable found for this Year and Department.");
+      }
+    } catch (err) {
+      console.error("TIMETABLE LOAD ERROR:", err);
+      showToast(err.message || "Unable to load timetable.");
+    }
+  }
+
+  async function loadSubjects() {
+    const date = $("attendance-date").value;
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const subjectSelect = $("attendance-subject");
+    const periodSelect = $("attendance-period");
+
+    subjectSelect.innerHTML = `<option value="">Select Subject</option>`;
+    periodSelect.innerHTML = `<option value="">Select Period</option>`;
+    clearManualRoster();
+
+    if (!year || !department) return;
+
+    if (!date) {
+      showToast("Please select the date first.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/manual_subjects?date=${q(date)}&year=${q(year)}&department=${q(department)}`);
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Unable to load subjects.");
+      }
+
+      const subjects = data.subjects || [];
+
+      subjects.forEach(subject => {
+        const option = document.createElement("option");
+        option.value = subject;
+        option.textContent = subject;
+        subjectSelect.appendChild(option);
+      });
+
+      if (!subjects.length) {
+        showToast("No subjects found for this Year and Department.");
+      }
+    } catch (err) {
+      console.error("SUBJECT LOAD ERROR:", err);
+      showToast(err.message || "Unable to load subjects.");
+    }
+  }
+
+  /* subject + date -> periods applicable to that subject on that day */
+  async function loadPeriods() {
+    const date = $("attendance-date").value;
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const subject = $("attendance-subject").value;
+    const periodSelect = $("attendance-period");
+
+    periodSelect.innerHTML = `<option value="">Select Period</option>`;
+    clearManualRoster();
+
+    if (!date || !year || !department || !subject) return;
+
+    try {
+      const res = await fetch(
+        `/api/manual_periods?date=${q(date)}&year=${q(year)}&department=${q(department)}&subject=${q(subject)}`
+      );
+      const data = await res.json();
+
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || "Unable to load periods.");
+      }
+
+      const periods = data.periods || [];
+
+      periods.forEach(period => {
+        const option = document.createElement("option");
+        option.value = period;
+        option.textContent = period;
+        periodSelect.appendChild(option);
+      });
+
+      if (!periods.length) {
+        showToast(`No period found for ${data.day}.`);
+      }
+    } catch (err) {
+      console.error("PERIOD LOAD ERROR:", err);
+      showToast(err.message || "Unable to load periods.");
+    }
+  }
+
+  $("attendance-date").addEventListener("change", () => {
+    $("attendance-subject").innerHTML = `<option value="">Select Subject</option>`;
+    $("attendance-period").innerHTML = `<option value="">Select Period</option>`;
+    clearManualRoster();
+
+    if ($("attendance-year").value && $("attendance-department").value) {
+      loadSubjects();
+    }
+  });
+
+  $("attendance-year").addEventListener("change", () => { loadSubjects(); loadTimetable(); });
+  $("attendance-department").addEventListener("change", () => { loadSubjects(); loadTimetable(); });
+  $("attendance-subject").addEventListener("change", loadPeriods);
+  $("attendance-period").addEventListener("change", clearManualRoster);
+
+  /* roster */
+  $("load-students").addEventListener("click", async function () {
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const period = $("attendance-period").value;
+    const subject = $("attendance-subject").value;
+    if (!year || !department || !subject || !period) {
+      showToast("Please select year, department, subject and period.");
+      return;
+    }
+    try {
+      const res = await fetch(`/get_students?year=${q(year)}&department=${q(department)}`);
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.message || "Unable to load students.");
+      const students = data.students || [];
+      const tbody = $("students-body");
+      tbody.innerHTML = "";
+      students.forEach(s => {
+        const id = esc(s.roll_no || "");
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${id}</td><td>${esc(s.name || "")}</td>
+          <td><select class="status-select Present" data-student-id="${id}">
+            <option value="Present">Present</option><option value="Absent">Absent</option></select></td>`;
+        tbody.appendChild(row);
+      });
+      $("student-list").style.display = "block";
+      showToast(`${students.length} students loaded.`);
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Unable to load students.");
+    }
+  });
+
+  // colour the status dropdown when it changes
+  $("students-body").addEventListener("change", e => {
+    if (e.target.classList.contains("status-select")) e.target.className = "status-select " + e.target.value;
+  });
+
+  /* save */
+  $("save-attendance").addEventListener("click", async function () {
+    const date = $("attendance-date").value;
+    const year = $("attendance-year").value;
+    const department = $("attendance-department").value;
+    const period = $("attendance-period").value;
+    const subject = $("attendance-subject").value;
+    if (!date || !year || !department || !period || !subject) { showToast("Please fill all attendance details."); return; }
+
+    const records = [...document.querySelectorAll(".status-select")].map(s => ({ roll_no: s.dataset.studentId, status: s.value }));
+    if (records.length === 0) { showToast("No students available."); return; }
+
+    try {
+      const res = await fetch("/save_attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, year, department, period, subject, records })
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) throw new Error(data.message || "Unable to save attendance.");
+      showToast(data.message || "Attendance saved successfully.");
+      clearManualRoster();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || "Attendance save failed.");
+    }
+  });
+
+})();
+</script>
+</body>
+</html>

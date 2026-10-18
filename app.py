@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 import sqlite3
 import os
 import re
+import calendar
 from datetime import datetime
 import cv2
 import base64
@@ -392,6 +393,19 @@ def admin():
         return "Access Denied"
 
     return render_template("admin.html")
+
+
+# =========================================================
+# MANUAL ATTENDANCE PAGE (separate page, opened from the admin dashboard)
+# =========================================================
+
+@app.route("/manual_attendance")
+def manual_attendance():
+
+    if not require_attendance_role():
+        return "Access Denied", 403
+
+    return render_template("manual_attendance.html")
 
 
 # =========================================================
@@ -3159,15 +3173,20 @@ def attendance_report_page():
 
 @app.route("/api/admin_attendance_report")
 def api_admin_attendance_report():
-    """Per-student attendance totals for a department + year.
+    """Month-end attendance report for a department + year.
 
-    One marked period = one hour (same rule as the student summary API).
+    Total hours  = every timetable period that falls inside the month
+                   (periods per weekday x number of those weekdays in the month)
+    Absent hours = periods the student was marked Absent in that month
+    Attended     = Total hours - Absent hours
+    Percentage   = Attended / Total hours * 100   (calculated on the page)
     """
     if session.get("role") != "admin":
         return jsonify({"success": False, "message": "Access Denied"}), 403
 
     year = normalize_year(request.args.get("year", "")).upper()
     department = request.args.get("department", "").strip()
+    month_value = request.args.get("month", "").strip() or datetime.now().strftime("%Y-%m")
 
     year_aliases = {
         "I": ["i", "1st", "1st year", "1"],
@@ -3181,6 +3200,26 @@ def api_admin_attendance_report():
             "success": False,
             "message": "Department and year are required."
         }), 400
+
+    try:
+        month_dt = datetime.strptime(month_value, "%Y-%m")
+    except ValueError:
+        return jsonify({
+            "success": False,
+            "message": "Invalid month. Use YYYY-MM."
+        }), 400
+
+    y, m = month_dt.year, month_dt.month
+    ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+    month_start = f"{y:04d}-{m:02d}-01"
+    next_month_start = f"{ny:04d}-{nm:02d}-01"
+
+    # How many Mondays, Tuesdays ... are there in this month?
+    day_names = ["monday", "tuesday", "wednesday", "thursday",
+                 "friday", "saturday", "sunday"]
+    weekday_counts = [0] * 7
+    for d in range(1, calendar.monthrange(y, m)[1] + 1):
+        weekday_counts[datetime(y, m, d).weekday()] += 1
 
     possible_years = year_aliases.get(year, [year.lower()])
 
@@ -3201,27 +3240,65 @@ def api_admin_attendance_report():
             )
         """)
 
+        # ---- total hours in the month (same for the whole class) ----
+        timetable_rows = db.execute("""
+            SELECT year, day, time, subject
+            FROM timetable
+            WHERE LOWER(TRIM(department)) = LOWER(TRIM(?))
+        """, (department,)).fetchall()
+
+        seen = set()
+        total_hours = 0
+        for r in timetable_rows:
+            if normalize_year(r["year"]).upper() != year:
+                continue
+            day = str(r["day"] or "").strip().lower()
+            if day not in day_names:
+                continue
+            key = (day,
+                   str(r["time"] or "").strip().lower(),
+                   str(r["subject"] or "").strip().lower())
+            if key in seen:          # same period uploaded twice
+                continue
+            seen.add(key)
+            total_hours += weekday_counts[day_names.index(day)]
+
+        # ---- absent hours per student in the month ----
         placeholders = ",".join(["?"] * len(possible_years))
 
         rows = db.execute(f"""
             SELECT
                 s.student_id,
                 s.name,
-                COALESCE(SUM(CASE WHEN LOWER(TRIM(a.status)) IN ('present', 'absent')
-                                  THEN 1 ELSE 0 END), 0) AS total_hours,
-                COALESCE(SUM(CASE WHEN LOWER(TRIM(a.status)) = 'present'
-                                  THEN 1 ELSE 0 END), 0) AS present_hours
+                COALESCE(SUM(CASE WHEN LOWER(TRIM(a.status)) = 'absent'
+                                  THEN 1 ELSE 0 END), 0) AS absent_hours
             FROM students s
-            LEFT JOIN attendance a ON a.student_id = s.student_id
+            LEFT JOIN attendance a
+                   ON a.student_id = s.student_id
+                  AND a.date >= ?
+                  AND a.date < ?
             WHERE LOWER(TRIM(s.year)) IN ({placeholders})
               AND LOWER(TRIM(s.department)) = LOWER(TRIM(?))
             GROUP BY s.student_id, s.name
             ORDER BY s.student_id
-        """, possible_years + [department]).fetchall()
+        """, [month_start, next_month_start] + possible_years + [department]).fetchall()
+
+        students = []
+        for r in rows:
+            absent = int(r["absent_hours"] or 0)
+            students.append({
+                "student_id": r["student_id"],
+                "name": r["name"],
+                "total_hours": total_hours,
+                "absent_hours": absent,
+                "present_hours": max(total_hours - absent, 0),
+            })
 
         return jsonify({
             "success": True,
-            "students": [dict(r) for r in rows]
+            "month": f"{y:04d}-{m:02d}",
+            "month_total_hours": total_hours,
+            "students": students
         })
 
     except Exception as e:

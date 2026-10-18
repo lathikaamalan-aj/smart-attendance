@@ -34,10 +34,10 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stro
 .title p{font-size:14px;color:var(--muted);margin-top:3px}
 
 /* filters */
-.filters{display:grid;grid-template-columns:1.6fr 1fr auto;gap:16px;align-items:end;background:linear-gradient(180deg,#f3f8ff,#eaf2ff);border:1px solid #d8e6fb;border-radius:16px;padding:18px}
+.filters{display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:16px;align-items:end;background:linear-gradient(180deg,#f3f8ff,#eaf2ff);border:1px solid #d8e6fb;border-radius:16px;padding:18px}
 .field label{display:block;font-size:13px;font-weight:700;color:#41536f;margin-bottom:7px}
-.field select,.search input{width:100%;height:46px;border:1px solid #d5e0ee;border-radius:11px;padding:0 14px;font-size:14px;font-weight:500;background:#fff;color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
-.field select:focus,.search input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(29,108,242,.14)}
+.field select,.field input,.search input{width:100%;height:46px;border:1px solid #d5e0ee;border-radius:11px;padding:0 14px;font-size:14px;font-weight:500;background:#fff;color:var(--ink);outline:none;transition:border-color .2s,box-shadow .2s}
+.field select:focus,.field input:focus,.search input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(29,108,242,.14)}
 
 .btn{position:relative;overflow:hidden;border:0;height:46px;padding:0 22px;border-radius:11px;font-weight:700;font-size:14px;color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:9px;white-space:nowrap;transition:transform .15s,box-shadow .25s,filter .2s}
 .btn:hover:not(:disabled){transform:translateY(-2px)}
@@ -86,7 +86,7 @@ svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stro
 
 .table-card{margin-top:14px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .table-scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:14px;min-width:760px}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:860px}
 th{background:#eaf1fc;color:var(--navy);padding:14px 16px;font-weight:800;font-size:13px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;border-bottom:1px solid var(--line);transition:background .2s}
 th:hover{background:#dfeafb}
 th.l,td.l{text-align:left}
@@ -115,6 +115,9 @@ tr.low .pct b{color:var(--red)}
 .pager button:hover:not(:disabled):not(.on){border-color:var(--blue);color:var(--blue);transform:translateY(-2px)}
 .pager button.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 8px 16px -8px rgba(29,108,242,.8)}
 .pager button:disabled{opacity:.4;cursor:not-allowed}
+
+.note{margin-top:18px;background:#f3f8ff;border:1px solid #d8e6fb;border-left:4px solid var(--blue);border-radius:12px;padding:12px 16px;font-size:13px;color:#41536f;line-height:1.6}
+.note b{color:var(--navy)}
 
 /* states */
 .state{text-align:center;padding:56px 20px;color:var(--muted)}
@@ -183,7 +186,7 @@ img,video{max-width:100%}
       <div class="title-icon"><svg class="i"><use href="#i-report"/></svg></div>
       <div>
         <h2>Attendance Report</h2>
-        <p>Select Department and Year to generate and download the attendance report.</p>
+        <p>Month-end report: select Department, Year and Month, then generate and download.</p>
       </div>
     </div>
 
@@ -204,6 +207,8 @@ img,video{max-width:100%}
           <option value="I">1st Year</option><option value="II">2nd Year</option>
           <option value="III">3rd Year</option><option value="IV">4th Year</option>
         </select></div>
+      <div class="field"><label for="month">Month</label>
+        <input type="month" id="month"></div>
       <button class="btn primary" id="gen" type="button"><svg class="i"><use href="#i-dl"/></svg><span class="spin"></span><span>Generate Report</span></button>
     </div>
 
@@ -212,10 +217,11 @@ img,video{max-width:100%}
     <div class="state" id="empty">
       <div class="ill"><svg class="i"><use href="#i-report"/></svg></div>
       <h3>No report generated yet</h3>
-      <p>Choose a department and year, then click <b>Generate Report</b>.</p>
+      <p>Choose a department, year and month, then click <b>Generate Report</b>.</p>
     </div>
 
     <div id="results">
+      <div class="note" id="formula-note"></div>
       <div class="stats">
         <div class="stat" style="--n:0"><div class="stat-ic b"><svg class="i"><use href="#i-users"/></svg></div><div><small>Total Students</small><b id="s-total">0</b></div></div>
         <div class="stat" style="--n:1">
@@ -253,7 +259,8 @@ img,video{max-width:100%}
             <th data-k="reg">Register No<span class="arr">▲</span></th>
             <th data-k="pct">Attendance %<span class="arr">▲</span></th>
             <th data-k="total">Total Hours<span class="arr">▲</span></th>
-            <th data-k="present">Present Hours<span class="arr">▲</span></th>
+            <th data-k="absent">Absent Hours<span class="arr">▲</span></th>
+            <th data-k="present">Attended Hours<span class="arr">▲</span></th>
           </tr></thead>
           <tbody id="tbody"></tbody>
         </table>
@@ -278,7 +285,7 @@ img,video{max-width:100%}
   const THRESHOLD = 75, PAGE_SIZE = 10;
   const YEAR_LABEL = {I:"1st Year", II:"2nd Year", III:"3rd Year", IV:"4th Year"};
 
-  const S = { rows: [], dept: "", year: "", filter: "all", q: "", sort: {k: "sno", dir: 1}, page: 1, generatedAt: null };
+  const S = { rows: [], dept: "", year: "", month: "", filter: "all", q: "", sort: {k: "sno", dir: 1}, page: 1, generatedAt: null };
 
   /* ---------- helpers ---------- */
   let tt;
@@ -301,6 +308,15 @@ img,video{max-width:100%}
       if (p < 1) requestAnimationFrame(step);
     })(start);
   }
+  function thisMonth() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+  }
+  function monthLabel(v) {
+    const [y, m] = v.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleString("en-GB", {month: "long", year: "numeric"});
+  }
+  $("month").value = thisMonth();
   function deptLabel() { return $("dept").selectedOptions[0].textContent; }
   function addRipple(e) {
     const b = e.currentTarget, r = b.getBoundingClientRect(), s = document.createElement("span");
@@ -312,21 +328,24 @@ img,video{max-width:100%}
 
   /* ---------- generate ---------- */
   $("gen").addEventListener("click", async () => {
-    const dept = $("dept").value, year = $("year").value;
-    if (!dept || !year) { toast("Please select both Department and Year.", "err"); return; }
+    const dept = $("dept").value, year = $("year").value, month = $("month").value;
+    if (!dept || !year || !month) { toast("Please select Department, Year and Month.", "err"); return; }
+    if (month > thisMonth()) { toast("That month has not started yet. Please choose the current or a past month.", "err"); return; }
     const btn = $("gen");
     btn.disabled = true; btn.classList.add("loading");
     $("empty").style.display = "none"; $("results").classList.remove("show"); $("skeleton").classList.add("show");
     try {
-      const res = await fetch(`/api/admin_attendance_report?department=${encodeURIComponent(dept)}&year=${encodeURIComponent(year)}`);
+      const res = await fetch(`/api/admin_attendance_report?department=${encodeURIComponent(dept)}&year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`);
       const data = await res.json();
       if (!res.ok || data.success === false) throw new Error(data.message || "Unable to generate report.");
       S.rows = (data.students || []).map((r, i) => {
-        const total = +r.total_hours || 0, present = +r.present_hours || 0;
-        return { sno: i + 1, name: r.name || "", reg: String(r.student_id || ""), total, present,
+        // Total hours in the month, minus absent hours = attended hours
+        const total = +r.total_hours || 0, absent = +r.absent_hours || 0;
+        const present = Math.max(total - absent, 0);
+        return { sno: i + 1, name: r.name || "", reg: String(r.student_id || ""), total, absent, present,
                  pct: total ? present * 100 / total : null };
       });
-      S.dept = dept; S.year = year; S.filter = "all"; S.q = ""; S.page = 1; S.sort = {k: "sno", dir: 1};
+      S.dept = dept; S.year = year; S.month = month; S.filter = "all"; S.q = ""; S.page = 1; S.sort = {k: "sno", dir: 1};
       S.generatedAt = new Date();
       $("q").value = "";
       $("gen-at").textContent = fmtDate(S.generatedAt);
@@ -338,6 +357,9 @@ img,video{max-width:100%}
         return;
       }
       $("results").classList.add("show");
+      $("formula-note").innerHTML = `<b>${esc(monthLabel(month))}</b> &middot; Total hours in the month: <b>${S.rows[0].total}</b><br>` +
+        `Attended hours = Total hours in the month &minus; Absent hours &nbsp;&middot;&nbsp; Attendance % = (Attended hours &divide; Total hours) &times; 100` +
+        (month === thisMonth() ? `<br><b>Note:</b> this month is not over yet, so days still to come count as attended until they are marked.` : "");
       setSeg("all"); renderStats(); render();
       toast(`Report generated for ${S.rows.length} students.`, "ok");
     } catch (err) {
@@ -387,12 +409,12 @@ img,video{max-width:100%}
     $("tbody").innerHTML = slice.map((r, i) => {
       const low = r.pct !== null && r.pct < THRESHOLD;
       const cls = r.pct === null ? "" : r.pct < THRESHOLD ? "bad" : r.pct < 85 ? "mid" : "";
-      const p = r.pct === null ? "N/A" : Math.round(r.pct) + "%";
+      const p = r.pct === null ? "N/A" : r.pct.toFixed(1) + "%";
       return `<tr class="${low ? "low" : ""}" style="--r:${i}">
         <td>${r.sno}</td><td class="l name">${esc(r.name)}${low ? '<span class="tag">LOW</span>' : ""}</td>
         <td>${esc(r.reg)}</td>
         <td><div class="pct"><div class="bar"><i class="${cls}" data-w="${r.pct ?? 0}"></i></div><b>${p}</b></div></td>
-        <td>${r.total}</td><td>${r.present}</td></tr>`;
+        <td>${r.total}</td><td>${r.absent}</td><td>${r.present}</td></tr>`;
     }).join("");
     requestAnimationFrame(() => requestAnimationFrame(() =>
       document.querySelectorAll(".bar i").forEach(i => i.style.width = i.dataset.w + "%")));
@@ -438,7 +460,7 @@ img,video{max-width:100%}
   window.addEventListener("resize", () => S.rows.length && setSeg(S.filter));
 
   /* ---------- downloads ---------- */
-  function fileBase() { return `Attendance_${S.dept}_${S.year}Year_${new Date().toISOString().slice(0, 10)}`; }
+  function fileBase() { return `Attendance_${S.dept}_${S.year}Year_${S.month}`; }
   function save(blob, name) {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -451,8 +473,8 @@ img,video{max-width:100%}
 
   $("dl-csv").addEventListener("click", () => {
     if (!S.rows.length) return;
-    const lines = [["S.No","Name","Register No","Total Hours","Present Hours","Attendance %"].join(",")];
-    S.rows.forEach(r => lines.push([r.sno, r.name, r.reg, r.total, r.present, r.pct === null ? "N/A" : Math.round(r.pct) + "%"].map(csvCell).join(",")));
+    const lines = [["S.No","Name","Register No","Month","Total Hours","Absent Hours","Attended Hours","Attendance %"].join(",")];
+    S.rows.forEach(r => lines.push([r.sno, r.name, r.reg, S.month, r.total, r.absent, r.present, r.pct === null ? "N/A" : r.pct.toFixed(1) + "%"].map(csvCell).join(",")));
     save(new Blob(["\ufeff" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"}), fileBase() + ".csv");
     toast("CSV downloaded.", "ok");
   });
@@ -465,7 +487,10 @@ img,video{max-width:100%}
     const navy = [10, 31, 68], blue = [16, 78, 170];
 
     doc.setFont("helvetica", "bold"); doc.setFontSize(24); doc.setTextColor(...navy);
-    doc.text("Attendance Report", W / 2, 56, {align: "center"});
+    doc.text("Attendance Report", W / 2, 50, {align: "center"});
+    doc.setFontSize(11); doc.setFont("helvetica", "normal"); doc.setTextColor(90, 105, 130);
+    doc.text("Month: " + monthLabel(S.month), W / 2, 66, {align: "center"});
+    doc.setFontSize(9);
     doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(90, 105, 130);
     doc.text("Date of Download:", W - M, 46, {align: "right"});
     doc.setFont("helvetica", "bold"); doc.setTextColor(...navy);
@@ -480,10 +505,13 @@ img,video{max-width:100%}
     doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...navy);
     doc.text(deptLabel(), M + 16, 129); doc.text(YEAR_LABEL[S.year] || S.year, W * 0.66 + 16, 129);
 
-    const body = S.rows.map(r => [r.sno, r.name, r.reg, r.total, r.present, r.pct === null ? "N/A" : Math.round(r.pct) + "%"]);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(90, 105, 130);
+    doc.text("Attended hours = Total hours in the month - Absent hours.  Attendance % = (Attended hours / Total hours) x 100.", M, 158);
+
+    const body = S.rows.map(r => [r.sno, r.name, r.reg, r.total, r.absent, r.present, r.pct === null ? "N/A" : r.pct.toFixed(1) + "%"]);
     doc.autoTable({
-      startY: 162, margin: {left: M, right: M, bottom: 40},
-      head: [["S.No", "Name", "Register No", "Total Hours", "Present Hours", "Attendance %"]], body,
+      startY: 168, margin: {left: M, right: M, bottom: 40},
+      head: [["S.No", "Name", "Register No", "Total Hours", "Absent Hours", "Attended Hours", "Attendance %"]], body,
       theme: "grid",
       styles: {font: "helvetica", fontSize: 10, cellPadding: 8, halign: "center", valign: "middle", textColor: navy, lineColor: [190, 214, 245], lineWidth: .5},
       headStyles: {fillColor: blue, textColor: 255, fontStyle: "bold"},
@@ -493,7 +521,7 @@ img,video{max-width:100%}
         const r = S.rows[d.row.index];
         if (r.pct !== null && r.pct < THRESHOLD) {
           d.cell.styles.fillColor = [255, 232, 236];
-          if (d.column.index === 5) { d.cell.styles.textColor = [220, 38, 38]; d.cell.styles.fontStyle = "bold"; }
+          if (d.column.index === 6) { d.cell.styles.textColor = [220, 38, 38]; d.cell.styles.fontStyle = "bold"; }
         }
       },
       didDrawPage() {

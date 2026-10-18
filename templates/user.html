@@ -153,7 +153,7 @@ img,video{max-width:100%}
   <div class="brand">
     <button class="ibtn menu" id="menuBtn" aria-label="Menu"><svg class="i"><use href="#menu"/></svg></button>
     <div class="logo"><svg class="i" style="width:26px;height:26px"><use href="#book"/></svg></div>
-    <div><h1>Student Attendance System</h1><small>Track · Monitor · Improve</small></div>
+    <div><h1>Student Attendance System</h1></div>
   </div>
   <div class="tools">
     <button class="ibtn" id="bellBtn" aria-label="Notifications"><svg class="i"><use href="#bell"/></svg><span class="dot" id="bellDot" hidden></span></button>
@@ -175,7 +175,7 @@ img,video{max-width:100%}
 <!-- ============ DASHBOARD ============ -->
 <section class="view on" id="v-dashboard"><div class="grid">
   <div class="col">
-    <div class="card banner"><div><h2>Welcome, {{ student.name.split(' ')[0] }} <span class="wave">👋</span></h2><p>{{ student.year }} {{ student.department }}</p></div>
+    <div class="card banner"><div><h2>Welcome, {{ student.name.split(' ')[0] }} </h2><p>{{ student.year }} {{ student.department }}</p></div>
       <svg class="art" viewBox="0 0 260 150" fill="none"><rect x="60" y="112" width="150" height="16" rx="8" fill="#3b6cf5"/><rect x="50" y="94" width="150" height="16" rx="8" fill="#8a6cf0"/><rect x="68" y="76" width="130" height="16" rx="8" fill="#dfe6ff"/><path d="M130 24l62 24-62 24-62-24z" fill="#1b2f7a"/><path d="M96 62v18c0 8 68 8 68 0V62l-34 14z" fill="#2a46a8"/><path d="M190 48v26" stroke="#f0b429" stroke-width="3"/><circle cx="190" cy="78" r="5" fill="#f0b429"/><path d="M30 130c-6-26 2-44 20-52-2 22-8 40-20 52z" fill="#3fbf8a"/></svg></div>
     <div class="stats" id="stats"></div>
     <div class="card"><div class="ch"><h2><svg class="i"><use href="#cal"/></svg>Today's Attendance</h2><span class="dchip" id="todayDate"></span></div>
@@ -195,14 +195,14 @@ img,video{max-width:100%}
 
 <!-- ============ TODAY ============ -->
 <section class="view" id="v-today">
-  <div class="page-h"><h2>Today's Attendance</h2><p>Your class-by-class attendance for any date.</p></div>
+  <div class="page-h"><h2>Today's Attendance</h2><p>Your class-by-class attendance </p></div>
   <div class="card"><div class="ch"><div class="dp"><button class="ar" id="dPrev" aria-label="Previous day">‹</button><input type="date" id="dPick"><button class="ar" id="dNext" aria-label="Next day">›</button><button class="btn" id="dToday" style="margin-left:6px">Today</button></div><span class="dchip" id="dayLabel"></span></div>
   <div class="tw"><table><thead><tr><th>Time</th><th>Subject</th><th>Staff</th><th>Status</th></tr></thead><tbody id="dayBody"></tbody></table></div></div>
 </section>
 
 <!-- ============ SUBJECTS ============ -->
 <section class="view" id="v-subjects">
-  <div class="page-h"><h2>Subject Attendance</h2><p>Tap a subject to see every class you attended or missed. Minimum required: 75%.</p></div>
+  <div class="page-h"><h2>Subject Attendance</h2></div>
   <div class="tb"><input type="search" id="subQ" placeholder="Search subject…"><div class="seg" id="subF"><button class="on" data-f="all">All</button><button data-f="ok">Safe</button><button data-f="low">Low</button></div></div>
   <div class="sg" id="subGrid"></div>
 </section>
@@ -217,7 +217,7 @@ img,video{max-width:100%}
 
 <!-- ============ PROFILE ============ -->
 <section class="view" id="v-profile">
-  <div class="page-h"><h2>My Profile</h2><p>Your details as registered with the college.</p></div>
+  <div class="page-h"><h2>My Profile</h2></div>
   <div class="card"><div class="hero"><span class="av" id="avBig"></span><div><h2 style="font-size:24px">{{ student.name }}</h2><p style="margin:4px 0 12px;color:var(--muted)">{{ student.year }} {{ student.department }} · Student</p><span class="bd p">Active</span></div></div>
   <div class="det"><div><small>Student ID</small><b>{{ student.student_id }}</b></div><div><small>Username</small><b>{{ student.username }}</b></div><div><small>Department</small><b>{{ student.department }}</b></div><div><small>Year</small><b>{{ student.year }}</b></div><div><small>Overall Attendance</small><b id="pfPct">--</b></div><div><small>Classes Attended</small><b id="pfAtt">--</b></div></div></div>
 </section>
