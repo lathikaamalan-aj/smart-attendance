@@ -23,7 +23,6 @@ USE_PG = bool(DATABASE_URL)
 
 if USE_PG:
     import psycopg2
-    import psycopg2.extras
 
 
 _PRAGMA = re.compile(r"^\s*PRAGMA\s+table_info\((\w+)\)\s*;?\s*$", re.I)
@@ -58,15 +57,47 @@ def translate(sql, params=()):
     return sql, params
 
 
+class Row(dict):
+    """Behaves like sqlite3.Row: row["name"], row[0], dict(row), row.keys()."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class Result:
+    """Cursor wrapper that returns Row objects."""
+
+    def __init__(self, cur):
+        self._cur = cur
+        self.rowcount = cur.rowcount
+        self.description = cur.description
+
+    def _wrap(self, values):
+        cols = [d[0] for d in self._cur.description]
+        return Row(zip(cols, values))
+
+    def fetchone(self):
+        if self._cur.description is None:
+            return None
+        values = self._cur.fetchone()
+        return None if values is None else self._wrap(values)
+
+    def fetchall(self):
+        if self._cur.description is None:
+            return []
+        return [self._wrap(v) for v in self._cur.fetchall()]
+
+    def __iter__(self):
+        return iter(self.fetchall())
+
+
 class PgConnection:
     """Mimics the small part of sqlite3.Connection that app.py uses."""
 
     def __init__(self):
-        self.conn = psycopg2.connect(
-            DATABASE_URL,
-            cursor_factory=psycopg2.extras.RealDictCursor,
-            connect_timeout=10,
-        )
+        self.conn = psycopg2.connect(DATABASE_URL, connect_timeout=10)
         self._sp = self.conn.cursor()
 
     def execute(self, sql, params=()):
@@ -81,7 +112,7 @@ class PgConnection:
             cur.execute(sql, params if params else None)
             if write:
                 self._sp.execute("RELEASE SAVEPOINT stmt")
-            return cur
+            return Result(cur)
         except psycopg2.Error as e:
             if write:
                 self._sp.execute("ROLLBACK TO SAVEPOINT stmt")

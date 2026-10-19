@@ -3,6 +3,7 @@ import sqlite3
 import os
 import re
 import calendar
+import shutil
 from datetime import datetime
 import cv2
 import base64
@@ -185,6 +186,75 @@ def train_face_model():
         json.dump(label_map, f, indent=4)
 
     return True, f"Face model trained with {len(faces)} images."
+
+
+# =========================================================
+# KEEP FACE IMAGES IN THE DATABASE
+# Render wipes the disk on every redeploy / restart, so every face image is
+# also stored in the face_samples table and written back to faces/ at startup.
+# =========================================================
+
+def save_face_sample_to_db(student_id, number, file_path):
+    """Store a copy of a saved face image in the database."""
+    try:
+        with open(file_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+
+        db = get_db_connection()
+        try:
+            db.execute(
+                "DELETE FROM face_samples WHERE student_id = ? AND number = ?",
+                (str(student_id), int(number))
+            )
+            db.execute(
+                "INSERT INTO face_samples (student_id, number, image) VALUES (?, ?, ?)",
+                (str(student_id), int(number), encoded)
+            )
+            db.commit()
+        finally:
+            db.close()
+        return True
+
+    except Exception as e:
+        print("FACE SAMPLE DB SAVE ERROR:", e)
+        return False
+
+
+def restore_faces_from_db():
+    """Write face images from the database back into faces/ and retrain if needed."""
+    db = get_db_connection()
+    try:
+        rows = db.execute(
+            "SELECT student_id, number, image FROM face_samples "
+            "ORDER BY student_id, number"
+        ).fetchall()
+    finally:
+        db.close()
+
+    restored = 0
+    for r in rows:
+        student_id = str(r["student_id"])
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", student_id):
+            continue
+
+        path = os.path.join(get_face_folder(student_id), f"{int(r['number'])}.jpg")
+        if os.path.exists(path):
+            continue
+
+        with open(path, "wb") as f:
+            f.write(base64.b64decode(r["image"]))
+        restored += 1
+
+    print(f"FACE RESTORE: {restored} image(s) restored, {len(rows)} stored in database")
+
+    # trainer.yml is also lost on redeploy (or may be an old copy from git),
+    # so rebuild it from the images whenever images were restored
+    if rows and (
+        restored > 0
+        or not (os.path.exists(TRAINER_PATH) and os.path.exists(FACE_LABELS_PATH))
+    ):
+        ok, msg = train_face_model()
+        print("FACE RESTORE TRAIN:", ok, msg)
 
 
 # =========================================================
@@ -492,6 +562,8 @@ def capture_face():
                 "message": "Failed to save face image."
             }), 500
 
+        save_face_sample_to_db(student_id, sample_number, file_path)
+
         if sample_number >= 20:
             try:
                 ok, msg = train_face_model()
@@ -652,6 +724,8 @@ def api_face_enrollment():
                 "success": False,
                 "message": "Failed to save face image."
             }), 500
+
+        save_face_sample_to_db(student_id, image_number, image_path)
 
         completed = image_number >= 20
 
@@ -1273,6 +1347,16 @@ def delete_student():
             WHERE username = ?
             AND role = 'student'
         """, (username,))
+
+        # remove this student's stored face images too
+        db.execute(
+            "DELETE FROM face_samples WHERE student_id = ?",
+            (str(student["student_id"]),)
+        )
+        shutil.rmtree(
+            os.path.join(FACE_DIR, str(student["student_id"])),
+            ignore_errors=True
+        )
 
         db.commit()
         db.close()
@@ -3429,6 +3513,13 @@ def init_db():
                 status TEXT NOT NULL,
                 marked_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS face_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id TEXT NOT NULL,
+                number INTEGER NOT NULL,
+                image TEXT NOT NULL,
+                UNIQUE (student_id, number)
+            );
         """)
 
         has_admin = db.execute(
@@ -3456,6 +3547,11 @@ try:
     ensure_student_contact_columns()
 except Exception as e:
     print("DATABASE INIT ERROR:", e)
+
+try:
+    restore_faces_from_db()
+except Exception as e:
+    print("FACE RESTORE ERROR:", e)
 
 
 # =========================================================

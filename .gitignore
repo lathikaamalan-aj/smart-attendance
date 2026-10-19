@@ -6,3 +6,4 @@ faces/
 .env
 .env
 *.db
+migrate_*.py

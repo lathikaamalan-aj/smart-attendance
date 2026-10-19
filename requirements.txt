@@ -14,3 +14,4 @@ Werkzeug==3.1.8
 gunicorn
 psycopg2-binary
 python-dotenv
+opencv-contrib-python-headless
