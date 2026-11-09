@@ -10,6 +10,11 @@ import base64
 import numpy as np
 import json
 import hmac
+import hashlib
+import secrets
+import smtplib
+from email.message import EmailMessage
+from datetime import timedelta, timezone
 import threading
 import webbrowser
 from db import connect
@@ -88,6 +93,33 @@ def ensure_student_contact_columns():
             db.execute("ALTER TABLE students ADD COLUMN email TEXT")
         if "phone" not in columns:
             db.execute("ALTER TABLE students ADD COLUMN phone TEXT")
+        db.commit()
+    finally:
+        db.close()
+
+
+def ensure_user_email_column():
+    """Keep the email field available in the shared users login table."""
+    db = get_db_connection()
+    try:
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+        if "email" not in columns:
+            db.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        # Copy existing student contact emails into the shared login table.
+        db.execute("""
+            UPDATE users
+            SET email = (
+                SELECT s.email FROM students s
+                WHERE s.username = users.username
+            )
+            WHERE role = 'student'
+              AND (email IS NULL OR TRIM(email) = '')
+              AND EXISTS (
+                SELECT 1 FROM students s
+                WHERE s.username = users.username
+                  AND s.email IS NOT NULL AND TRIM(s.email) <> ''
+              )
+        """)
         db.commit()
     finally:
         db.close()
@@ -323,6 +355,181 @@ def login():
 
 
 # =========================================================
+# PASSWORD RESET WITH EMAIL OTP (admin, faculty, student, representative)
+# =========================================================
+
+def _otp_digest(user_id, otp):
+    secret = os.environ.get("OTP_SECRET", app.secret_key)
+    raw = f"{user_id}:{otp}:{secret}".encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _send_reset_otp(to_email, otp):
+    host = os.environ.get("BREVO_SMTP_HOST", "smtp-relay.brevo.com")
+    port = int(os.environ.get("BREVO_SMTP_PORT", "587"))
+    smtp_login = os.environ.get("BREVO_SMTP_LOGIN", "").strip()
+    smtp_key = os.environ.get("BREVO_SMTP_KEY", "").strip()
+    sender = os.environ.get("BREVO_SENDER_EMAIL", "").strip()
+
+    if not all([host, smtp_login, smtp_key, sender]):
+        raise RuntimeError("Email service is not configured. Check SMTP environment variables.")
+
+    msg = EmailMessage()
+    msg["Subject"] = "Smart Attendance - Password Reset OTP"
+    msg["From"] = sender
+    msg["To"] = to_email
+    msg.set_content(
+        f"Your Smart Attendance password reset OTP is {otp}.\n\n"
+        "It is valid for 5 minutes. Do not share this code with anyone.\n"
+        "If you did not request this, ignore this email."
+    )
+
+    with smtplib.SMTP(host, port, timeout=20) as server:
+        server.starttls()
+        server.login(smtp_login, smtp_key)
+        server.send_message(msg)
+
+
+@app.route("/forgot-password/send", methods=["POST"])
+def forgot_password_send():
+    # A newly requested OTP must be verified again, even in the same browser session.
+    session.pop("password_reset_user_id", None)
+    session.pop("password_reset_email", None)
+    email = request.form.get("email", "").strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return jsonify({"success": False, "message": "Enter a valid email address."}), 400
+
+    db = None
+    try:
+        db = get_db_connection()
+        user = db.execute(
+            "SELECT id, username, email FROM users WHERE LOWER(email) = ? LIMIT 1",
+            (email,)
+        ).fetchone()
+
+        # Use a generic response so the endpoint does not reveal registered emails.
+        if not user:
+            return jsonify({"success": True, "message": "If this email is registered, an OTP will be sent."})
+
+        recent = db.execute(
+            "SELECT created_at FROM password_reset_otps WHERE user_id = ? LIMIT 1",
+            (user["id"],)
+        ).fetchone()
+        if recent:
+            try:
+                last = datetime.fromisoformat(recent["created_at"])
+                if (datetime.now(timezone.utc) - last).total_seconds() < 60:
+                    return jsonify({"success": False, "message": "Please wait 60 seconds before requesting another OTP."}), 429
+            except (TypeError, ValueError):
+                pass
+
+        otp = f"{secrets.randbelow(1000000):06d}"
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(minutes=5)
+        db.execute("DELETE FROM password_reset_otps WHERE user_id = ?", (user["id"],))
+        db.execute(
+            "INSERT INTO password_reset_otps (user_id, otp_hash, expires_at, attempts, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user["id"], _otp_digest(user["id"], otp), expires.isoformat(), 0, now.isoformat())
+        )
+        db.commit()
+        _send_reset_otp(user["email"], otp)
+        return jsonify({"success": True, "message": "OTP sent to your registered email address."})
+    except Exception as e:
+        if db is not None:
+            try: db.rollback()
+            except Exception: pass
+        print("FORGOT PASSWORD SEND ERROR:", e)
+        return jsonify({"success": False, "message": "Unable to send OTP. Please try again later."}), 500
+    finally:
+        if db is not None:
+            db.close()
+
+
+@app.route("/forgot-password/verify", methods=["POST"])
+def forgot_password_verify():
+    email = request.form.get("email", "").strip().lower()
+    otp = request.form.get("otp", "").strip()
+    if not re.fullmatch(r"\d{6}", otp):
+        return jsonify({"success": False, "message": "Enter the 6-digit OTP."}), 400
+
+    db = get_db_connection()
+    try:
+        row = db.execute(
+            "SELECT u.id, r.otp_hash, r.expires_at, r.attempts FROM users u "
+            "JOIN password_reset_otps r ON r.user_id = u.id "
+            "WHERE LOWER(u.email) = ? LIMIT 1", (email,)
+        ).fetchone()
+        if not row:
+            return jsonify({"success": False, "message": "Invalid or expired OTP."}), 400
+        if int(row["attempts"] or 0) >= 5:
+            return jsonify({"success": False, "message": "Too many attempts. Request a new OTP."}), 429
+        expires = datetime.fromisoformat(row["expires_at"])
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires:
+            db.execute("DELETE FROM password_reset_otps WHERE user_id = ?", (row["id"],))
+            db.commit()
+            return jsonify({"success": False, "message": "OTP expired. Request a new one."}), 400
+        if not hmac.compare_digest(str(row["otp_hash"]), _otp_digest(row["id"], otp)):
+            db.execute("UPDATE password_reset_otps SET attempts = attempts + 1 WHERE user_id = ?", (row["id"],))
+            db.commit()
+            return jsonify({"success": False, "message": "Incorrect OTP."}), 400
+
+        session["password_reset_user_id"] = row["id"]
+        session["password_reset_email"] = email
+        return jsonify({"success": True, "message": "OTP verified. You can set a new password."})
+    except Exception as e:
+        print("OTP VERIFY ERROR:", e)
+        return jsonify({"success": False, "message": "Unable to verify OTP."}), 500
+    finally:
+        db.close()
+
+
+@app.route("/forgot-password/reset", methods=["POST"])
+def forgot_password_reset():
+    user_id = session.get("password_reset_user_id")
+    new_password = request.form.get("new_password", "")
+    if not user_id:
+        return jsonify({"success": False, "message": "Verify your OTP first."}), 401
+    if len(new_password) < 6:
+        return jsonify({"success": False, "message": "Password must contain at least 6 characters."}), 400
+
+    db = get_db_connection()
+    try:
+        otp_row = db.execute(
+            "SELECT expires_at FROM password_reset_otps WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+        if not otp_row:
+            return jsonify({"success": False, "message": "Reset session expired. Request a new OTP."}), 400
+        expires = datetime.fromisoformat(otp_row["expires_at"])
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expires:
+            db.execute("DELETE FROM password_reset_otps WHERE user_id = ?", (user_id,))
+            db.commit()
+            session.pop("password_reset_user_id", None)
+            session.pop("password_reset_email", None)
+            return jsonify({"success": False, "message": "OTP expired. Request a new one."}), 400
+
+        db.execute("UPDATE users SET password = ? WHERE id = ?", (new_password, user_id))
+        user = db.execute("SELECT username, role FROM users WHERE id = ?", (user_id,)).fetchone()
+        if user and user["role"] == "student":
+            db.execute("UPDATE students SET password = ? WHERE username = ?", (new_password, user["username"]))
+        db.execute("DELETE FROM password_reset_otps WHERE user_id = ?", (user_id,))
+        db.commit()
+        session.pop("password_reset_user_id", None)
+        session.pop("password_reset_email", None)
+        return jsonify({"success": True, "message": "Password reset successfully. Please sign in."})
+    except Exception as e:
+        db.rollback()
+        print("PASSWORD RESET ERROR:", e)
+        return jsonify({"success": False, "message": "Unable to reset password."}), 500
+    finally:
+        db.close()
+
+
+# =========================================================
 # STUDENT SELF REGISTRATION
 # =========================================================
 
@@ -411,8 +618,8 @@ def register():
         )
 
         db.execute(
-            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            (username, password, "student")
+            "INSERT INTO users (username, password, role, email) VALUES (?, ?, ?, ?)",
+            (username, password, "student", email)
         )
 
         db.commit()
@@ -3879,6 +4086,13 @@ def init_db():
                 password TEXT NOT NULL,
                 role TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS password_reset_otps (
+                user_id INTEGER PRIMARY KEY,
+                otp_hash TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS students (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id TEXT UNIQUE NOT NULL,
@@ -3961,6 +4175,7 @@ def init_db():
 try:
     init_db()
     ensure_student_contact_columns()
+    ensure_user_email_column()
 except Exception as e:
     print("DATABASE INIT ERROR:", e)
 

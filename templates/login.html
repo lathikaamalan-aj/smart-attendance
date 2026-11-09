@@ -217,6 +217,20 @@
     .tab{font-size:14px;padding:13px 6px}
   }
   @media (prefers-reduced-motion:reduce){*,*::before{transition:none!important;animation:none!important}}
+
+  .reset-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:20;align-items:center;justify-content:center;padding:18px}
+  .reset-backdrop.show{display:flex}
+  .reset-card{width:100%;max-width:430px;background:#fff;border-radius:22px;padding:28px;box-shadow:0 25px 60px rgba(15,23,42,.25)}
+  .reset-card h2{font-size:23px;margin-bottom:6px}
+  .reset-card p{font-size:13px;color:#64748B;margin-bottom:18px}
+  .reset-card label{display:block;margin:14px 0 6px}
+  .reset-card input{width:100%;height:46px;padding:0 13px;border:1px solid var(--line);border-radius:12px;background:var(--field);font:500 14px 'Plus Jakarta Sans',sans-serif}
+  .reset-actions{display:flex;gap:10px;margin-top:18px}
+  .reset-actions button{flex:1;height:46px;border:0;border-radius:12px;font:700 14px 'Plus Jakarta Sans',sans-serif;cursor:pointer}
+  .reset-primary{background:var(--blue);color:#fff}
+  .reset-secondary{background:#EEF2FF;color:#1E40AF}
+  .reset-status{font-size:13px;margin-top:12px;min-height:18px}
+
 </style>
 </head>
 <body>
@@ -391,6 +405,32 @@
   </aside>
 </main>
 
+
+<div class="reset-backdrop" id="resetBackdrop" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+  <div class="reset-card">
+    <h2 id="resetTitle">Reset password</h2>
+    <p>We will send a 6-digit OTP to your registered email address.</p>
+    <div id="resetStepEmail">
+      <label for="resetEmail">Registered email</label>
+      <input id="resetEmail" type="email" placeholder="Enter your registered email" autocomplete="email">
+      <div class="reset-actions"><button type="button" class="reset-secondary" id="resetClose1">Cancel</button><button type="button" class="reset-primary" id="sendOtpBtn">Send OTP</button></div>
+    </div>
+    <div id="resetStepOtp" hidden>
+      <label for="resetOtp">6-digit OTP</label>
+      <input id="resetOtp" inputmode="numeric" maxlength="6" placeholder="Enter OTP">
+      <div class="reset-actions"><button type="button" class="reset-secondary" id="backEmailBtn">Back</button><button type="button" class="reset-primary" id="verifyOtpBtn">Verify OTP</button></div>
+    </div>
+    <div id="resetStepPassword" hidden>
+      <label for="resetNewPassword">New password</label>
+      <input id="resetNewPassword" type="password" placeholder="At least 6 characters" autocomplete="new-password">
+      <label for="resetConfirmPassword">Confirm password</label>
+      <input id="resetConfirmPassword" type="password" placeholder="Re-enter new password" autocomplete="new-password">
+      <div class="reset-actions"><button type="button" class="reset-secondary" id="resetClose2">Cancel</button><button type="button" class="reset-primary" id="resetPasswordBtn">Reset password</button></div>
+    </div>
+    <div class="reset-status" id="resetStatus" role="status"></div>
+  </div>
+</div>
+
 <p class="foot">Smart Attendance Management System • Secured with Biometrics</p>
 
 <script>
@@ -483,9 +523,76 @@ document.querySelectorAll(".eye").forEach(btn => {
   };
 });
 
+const resetBackdrop = $("resetBackdrop");
+const resetStatus = $("resetStatus");
+let resetEmail = "";
+function resetMessage(message, good=false){
+  resetStatus.textContent = message;
+  resetStatus.style.color = good ? "#166534" : "#B91C1C";
+}
+function closeReset(){
+  resetBackdrop.classList.remove("show");
+  resetMessage("");
+}
+function showResetStep(step){
+  $("resetStepEmail").hidden = step !== "email";
+  $("resetStepOtp").hidden = step !== "otp";
+  $("resetStepPassword").hidden = step !== "password";
+  resetMessage("");
+}
+async function resetPost(url, fields){
+  const res = await post(url, fields);
+  if (!res.ok || !res.data.success) throw new Error(res.data.message || "Request failed.");
+  return res.data;
+}
 $("forgot").onclick = e => {
   e.preventDefault();
-  showMsg("Please contact your administrator to reset your password.", "err");
+  resetEmail = "";
+  $("resetEmail").value = "";
+  $("resetOtp").value = "";
+  $("resetNewPassword").value = "";
+  $("resetConfirmPassword").value = "";
+  showResetStep("email");
+  resetBackdrop.classList.add("show");
+  $("resetEmail").focus();
+};
+$("resetClose1").onclick = $("resetClose2").onclick = closeReset;
+$("backEmailBtn").onclick = () => showResetStep("email");
+resetBackdrop.addEventListener("click", e => { if (e.target === resetBackdrop) closeReset(); });
+$("sendOtpBtn").onclick = async () => {
+  resetEmail = $("resetEmail").value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(resetEmail)) return resetMessage("Enter a valid email address.");
+  $("sendOtpBtn").disabled = true;
+  try {
+    const data = await resetPost("/forgot-password/send", {email: resetEmail});
+    resetMessage(data.message, true);
+    showResetStep("otp");
+  } catch (err) { resetMessage(err.message); }
+  finally { $("sendOtpBtn").disabled = false; }
+};
+$("verifyOtpBtn").onclick = async () => {
+  const otp = $("resetOtp").value.trim();
+  if (!/^\d{6}$/.test(otp)) return resetMessage("Enter the 6-digit OTP.");
+  $("verifyOtpBtn").disabled = true;
+  try {
+    const data = await resetPost("/forgot-password/verify", {email: resetEmail, otp});
+    resetMessage(data.message, true);
+    showResetStep("password");
+  } catch (err) { resetMessage(err.message); }
+  finally { $("verifyOtpBtn").disabled = false; }
+};
+$("resetPasswordBtn").onclick = async () => {
+  const password = $("resetNewPassword").value;
+  const confirm = $("resetConfirmPassword").value;
+  if (password.length < 6) return resetMessage("Password must contain at least 6 characters.");
+  if (password !== confirm) return resetMessage("Passwords do not match.");
+  $("resetPasswordBtn").disabled = true;
+  try {
+    const data = await resetPost("/forgot-password/reset", {new_password: password});
+    resetMessage(data.message, true);
+    setTimeout(() => { closeReset(); showMsg("Password reset successfully. Please sign in.", "ok"); }, 900);
+  } catch (err) { resetMessage(err.message); }
+  finally { $("resetPasswordBtn").disabled = false; }
 };
 
 /* ---------- POST helper ---------- */
