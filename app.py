@@ -294,6 +294,9 @@ def login():
                 elif user["role"] == "representative":
                     redirect_url = "/representative"
 
+                elif user["role"] == "faculty":
+                    redirect_url = "/staff"
+
                 else:
                     redirect_url = "/student"
 
@@ -1444,7 +1447,7 @@ def sort_periods(periods):
 
 
 def require_attendance_role():
-    return session.get("role") in ["admin", "representative"]
+    return session.get("role") in ["admin", "representative", "faculty"]
 
 
 def kiosk_or_staff():
@@ -3265,7 +3268,7 @@ def api_admin_attendance_report():
     Attended     = Total hours - Absent hours
     Percentage   = Attended / Total hours * 100   (calculated on the page)
     """
-    if session.get("role") != "admin":
+    if session.get("role") not in ("admin", "faculty"):
         return jsonify({"success": False, "message": "Access Denied"}), 403
 
     year = normalize_year(request.args.get("year", "")).upper()
@@ -3459,6 +3462,399 @@ def api_change_password():
 
 
 # =========================================================
+# FACULTY: PAGES, CLASS ATTENDANCE API, FACULTY UPLOAD
+# =========================================================
+
+from datetime import timedelta, timezone
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def now_local():
+    """Current time in India (Render servers run in UTC)."""
+    return datetime.now(IST)
+
+
+def _staff_page(page):
+    if not require_attendance_role():
+        return redirect(url_for("login"))
+    return render_template(
+        "staff.html",
+        page=page,
+        username=session.get("username", ""),
+        role=session.get("role", "")
+    )
+
+
+@app.route("/staff")
+def staff_home():
+    return _staff_page("home")
+
+
+@app.route("/staff/manual")
+def staff_manual():
+    return _staff_page("manual")
+
+
+@app.route("/staff/hourly")
+def staff_hourly():
+    return _staff_page("hourly")
+
+
+@app.route("/staff/report")
+def staff_report():
+    return _staff_page("report")
+
+
+def _year_variants(year):
+    aliases = {
+        "I": ["i", "1st", "1st year", "1"],
+        "II": ["ii", "2nd", "2nd year", "2"],
+        "III": ["iii", "3rd", "3rd year", "3"],
+        "IV": ["iv", "4th", "4th year", "4"],
+    }
+    y = normalize_year(year).upper()
+    return aliases.get(y, [y.lower()])
+
+
+@app.route("/api/departments")
+def api_departments():
+    if not require_attendance_role():
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+
+    db = get_db_connection()
+    try:
+        rows = db.execute("""
+            SELECT DISTINCT TRIM(department) AS department
+            FROM students
+            WHERE department IS NOT NULL AND TRIM(department) <> ''
+            ORDER BY department
+        """).fetchall()
+        return jsonify({"success": True,
+                        "departments": [r["department"] for r in rows]})
+    except Exception as e:
+        print("DEPARTMENTS ERROR:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/period_attendance")
+def api_period_attendance():
+    """Every period of a day with the full student list and each status."""
+    if not require_attendance_role():
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+
+    date_value = request.args.get("date", "").strip()
+    year = normalize_year(request.args.get("year", ""))
+    department = request.args.get("department", "").strip()
+
+    if not date_value or not year or not department:
+        return jsonify({
+            "success": False,
+            "message": "Date, year and department are required."
+        }), 400
+
+    try:
+        day_name = datetime.strptime(date_value, "%Y-%m-%d").strftime("%A")
+    except ValueError:
+        return jsonify({"success": False, "message": "Invalid date."}), 400
+
+    db = None
+    try:
+        db = get_db_connection()
+
+        variants = _year_variants(year)
+        placeholders = ",".join(["?"] * len(variants))
+
+        students = db.execute(f"""
+            SELECT student_id, name
+            FROM students
+            WHERE LOWER(TRIM(year)) IN ({placeholders})
+              AND LOWER(TRIM(department)) = LOWER(TRIM(?))
+            ORDER BY student_id
+        """, variants + [department]).fetchall()
+
+        slots = db.execute("""
+            SELECT time, subject, faculty
+            FROM timetable
+            WHERE UPPER(TRIM(year)) = UPPER(TRIM(?))
+              AND LOWER(TRIM(department)) = LOWER(TRIM(?))
+              AND LOWER(TRIM(day)) = LOWER(TRIM(?))
+        """, (year, department, day_name)).fetchall()
+
+        status_map = {}
+        try:
+            marked = db.execute("""
+                SELECT student_id, time, subject, status
+                FROM attendance
+                WHERE date = ?
+            """, (date_value,)).fetchall()
+            for a in marked:
+                key = (str(a["student_id"]),
+                       str(a["time"]).strip().lower(),
+                       str(a["subject"]).strip().lower())
+                status_map[key] = str(a["status"]).strip().capitalize()
+        except Exception:
+            pass  # attendance table not created yet
+
+        now = now_local()
+        today = now.strftime("%Y-%m-%d")
+        now_minutes = now.hour * 60 + now.minute
+
+        periods = []
+        seen = set()
+
+        for slot in sorted(slots, key=lambda r: period_start_minutes(r["time"])):
+            time_text = str(slot["time"] or "").strip()
+            subject = str(slot["subject"] or "").strip()
+
+            if (time_text.lower(), subject.lower()) in seen:
+                continue
+            seen.add((time_text.lower(), subject.lower()))
+
+            parsed = _parse_timetable_range(time_text)
+
+            if date_value < today:
+                state = "ended"
+            elif date_value > today:
+                state = "upcoming"
+            elif not parsed:
+                state = "unknown"
+            elif now_minutes >= parsed[1]:
+                state = "ended"
+            elif now_minutes >= parsed[0]:
+                state = "ongoing"
+            else:
+                state = "upcoming"
+
+            rows = []
+            present = absent = 0
+            for st in students:
+                sid = str(st["student_id"])
+                status = status_map.get(
+                    (sid, time_text.lower(), subject.lower()), "Not marked"
+                )
+                if status == "Present":
+                    present += 1
+                elif status == "Absent":
+                    absent += 1
+                rows.append({"roll_no": sid, "name": st["name"], "status": status})
+
+            periods.append({
+                "time": time_text,
+                "subject": subject,
+                "faculty": slot["faculty"],
+                "state": state,
+                "present": present,
+                "absent": absent,
+                "not_marked": len(rows) - present - absent,
+                "students": rows
+            })
+
+        return jsonify({
+            "success": True,
+            "day": day_name,
+            "total_students": len(students),
+            "periods": periods
+        })
+
+    except Exception as e:
+        print("PERIOD ATTENDANCE ERROR:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        if db is not None:
+            db.close()
+
+
+FACULTY_CSV = os.path.join(BASE_DIR, "Faculty.csv")
+
+
+def _csv_faculty():
+    """Faculty.csv shipped with the project (used to seed the database)."""
+    import csv
+    data = {}
+    try:
+        with open(FACULTY_CSV, newline="", encoding="utf-8-sig") as f:
+            for r in csv.DictReader(f):
+                name = (r.get("name") or "").strip()
+                if name:
+                    data[name.lower()] = {
+                        "name": name,
+                        "department": (r.get("department") or "").strip(),
+                        "year": normalize_year(r.get("year")),
+                    }
+    except FileNotFoundError:
+        print("Faculty.csv not found")
+    return data
+
+
+def load_faculty():
+    """Faculty from the database (falls back to Faculty.csv)."""
+    data = {}
+    try:
+        db = get_db_connection()
+        try:
+            for r in db.execute("SELECT name, department, year FROM faculty").fetchall():
+                data[str(r["name"]).strip().lower()] = {
+                    "name": str(r["name"]).strip(),
+                    "department": str(r["department"] or "").strip(),
+                    "year": normalize_year(r["year"]),
+                }
+        finally:
+            db.close()
+    except Exception as e:
+        print("FACULTY LOAD ERROR:", e)
+    return data or _csv_faculty()
+
+
+@app.route("/api/faculty_profile")
+def api_faculty_profile():
+    if not require_attendance_role():
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+    username = session.get("username", "")
+    info = load_faculty().get(username.lower(), {})
+    return jsonify({
+        "success": True,
+        "username": username,
+        "role": session.get("role", ""),
+        "name": info.get("name", username),
+        "department": info.get("department", ""),
+        "year": info.get("year", ""),
+    })
+
+
+@app.route("/add_faculty")
+def add_faculty_page():
+    if session.get("role") != "admin":
+        return "Access Denied"
+    return render_template("add_faculty.html")
+
+
+@app.route("/api/faculty_list")
+def api_faculty_list():
+    if session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+    db = get_db_connection()
+    try:
+        rows = db.execute(
+            "SELECT name, department, year FROM faculty ORDER BY year, department, name"
+        ).fetchall()
+        return jsonify({"success": True, "faculty": [
+            {"name": r["name"], "department": r["department"], "year": r["year"]}
+            for r in rows]})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/faculty_set_password", methods=["POST"])
+def api_faculty_set_password():
+    """Set one password for every faculty login."""
+    if session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+    pw = str((request.get_json(silent=True) or {}).get("password", "")).strip()
+    if len(pw) < 6:
+        return jsonify({"success": False,
+                        "message": "Password must contain at least 6 characters."}), 400
+    db = get_db_connection()
+    try:
+        n = db.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'faculty'").fetchone()["c"]
+        db.execute("UPDATE users SET password = ? WHERE role = 'faculty'", (pw,))
+        db.commit()
+        return jsonify({"success": True, "count": n,
+                        "message": f"Password updated for {n} faculty login(s)."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/upload_faculty_csv", methods=["POST"])
+def upload_faculty_csv():
+    """Rows come from the browser (CSV or Excel parsed there).
+    Columns: name, department, year [, password]."""
+    if session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if len(rows) < 2:
+        return jsonify({"success": False,
+                        "message": "The file must contain a header row and faculty data."}), 400
+
+    headers = [str(h).strip().lower().replace(" ", "_") for h in rows[0]]
+    for need in ("name", "department", "year"):
+        if need not in headers:
+            return jsonify({"success": False,
+                            "message": "Missing column. Use: name, department, year (password optional)."}), 400
+    idx = {h: headers.index(h) for h in ("name", "department", "year", "password") if h in headers}
+
+    default_pw = str(data.get("default_password") or "").strip() \
+        or os.environ.get("FACULTY_DEFAULT_PASSWORD", "faculty123")
+    if len(default_pw) < 6:
+        return jsonify({"success": False,
+                        "message": "Default password must contain at least 6 characters."}), 400
+    reset_existing = bool(data.get("reset_existing"))
+    added = updated = skipped = 0
+    errors = []
+    db = get_db_connection()
+    try:
+        for n, row in enumerate(rows[1:], start=2):
+            if not row or not any(str(c).strip() for c in row):
+                continue
+
+            def cell(k):
+                i = idx.get(k)
+                return str(row[i]).strip() if i is not None and i < len(row) and row[i] is not None else ""
+
+            name, dept = cell("name"), cell("department")
+            year = normalize_year(cell("year")).upper()
+            password = cell("password") or default_pw
+
+            if not (name and dept and year):
+                skipped += 1
+                errors.append(f"Row {n}: name, department and year are required")
+                continue
+            if year not in ("I", "II", "III", "IV"):
+                skipped += 1
+                errors.append(f"Row {n}: year must be I, II, III or IV")
+                continue
+
+            exists = db.execute(
+                "SELECT id FROM faculty WHERE LOWER(name) = LOWER(?)", (name,)
+            ).fetchone()
+            if exists:
+                db.execute("UPDATE faculty SET department = ?, year = ? WHERE id = ?",
+                           (dept, year, exists["id"]))
+                updated += 1
+            else:
+                db.execute("INSERT INTO faculty (name, department, year) VALUES (?, ?, ?)",
+                           (name, dept, year))
+                added += 1
+
+            user = db.execute("SELECT id, role FROM users WHERE LOWER(username) = LOWER(?)",
+                              (name,)).fetchone()
+            if not user:
+                db.execute("INSERT INTO users (username, password, role) VALUES (?, ?, 'faculty')",
+                           (name, password))
+            elif reset_existing and user["role"] == "faculty":
+                db.execute("UPDATE users SET password = ? WHERE id = ?", (password, user["id"]))
+
+        db.commit()
+        return jsonify({"success": True, "added": added, "updated": updated,
+                        "skipped": skipped, "errors": errors[:50],
+                        "message": f"{added} faculty added, {updated} updated."})
+    except Exception as e:
+        print("UPLOAD FACULTY ERROR:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+# =========================================================
 # TEST
 # =========================================================
 
@@ -3494,6 +3890,12 @@ def init_db():
                 email TEXT,
                 phone TEXT,
                 gender TEXT
+            );
+            CREATE TABLE IF NOT EXISTS faculty (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                department TEXT NOT NULL,
+                year TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS timetable (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3535,6 +3937,20 @@ def init_db():
                 (admin_user, admin_pass)
             )
             print("DEFAULT ADMIN CREATED:", admin_user)
+
+        # Faculty from Faculty.csv -> faculty table + a login for each
+        fac_pass = os.environ.get("FACULTY_DEFAULT_PASSWORD", "faculty123")
+        for f in _csv_faculty().values():
+            if not db.execute("SELECT 1 FROM faculty WHERE LOWER(name) = LOWER(?)",
+                              (f["name"],)).fetchone():
+                db.execute("INSERT INTO faculty (name, department, year) VALUES (?, ?, ?)",
+                           (f["name"], f["department"], f["year"]))
+        for r in db.execute("SELECT name FROM faculty").fetchall():
+            db.execute(
+                "INSERT OR IGNORE INTO users (username, password, role) "
+                "VALUES (?, ?, 'faculty')",
+                (r["name"], fac_pass)
+            )
 
         db.commit()
     finally:
