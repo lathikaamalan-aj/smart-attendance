@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Faculty - Smart Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--navy:#0a1f44;--navy-3:#1d3f85;--accent:#3b82f6;--blue:#1d6cf2;--ink:#0f1b33;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb;--tint:#eaf0fb;--green:#15803d;--gbg:#e8f6ee;--red:#dc2626;--rbg:#fff1f2}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input{font-family:inherit}
+.topbar{background:var(--navy);color:#fff;height:68px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+.brand{display:flex;align-items:center;gap:14px}.bi{width:40px;height:40px;border-radius:12px;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:800;font-size:15px}
+.brand h1{font-size:18px;font-weight:800}.brand p{font-size:12px;color:#a9b8d8;margin-top:2px}
+.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.3);padding:8px 16px;border-radius:10px;font-weight:600;font-size:14px}
+.back:hover{background:rgba(255,255,255,.12)}.back:focus-visible,.btn:focus-visible,.drop:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1000px;margin:0 auto;padding:28px 24px 60px}
+.title h2{font-size:26px;font-weight:800;color:var(--navy);letter-spacing:-.02em}.title p{color:var(--muted);font-size:14.5px;margin:6px 0 22px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:20px;box-shadow:0 10px 26px -20px rgba(10,31,68,.45)}
+.panel h3{font-size:16px;font-weight:800;color:var(--navy);margin-bottom:6px}.panel>p{font-size:13.5px;color:var(--muted);margin-bottom:16px;line-height:1.55}
+.drop{display:block;border:2px dashed #b9cdf0;border-radius:16px;background:linear-gradient(180deg,#f7faff,#eef4ff);padding:34px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+.drop:hover,.drop.on{border-color:var(--blue);background:#eaf2ff}
+.drop b{display:block;font-size:16px;color:var(--navy);margin-bottom:6px}.drop span{font-size:13px;color:var(--muted)}
+.drop input{display:none}
+.fname{margin-top:12px;font-size:14px;font-weight:700;color:var(--navy)}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px;align-items:center}
+.btn{height:44px;padding:0 20px;border:0;border-radius:11px;background:var(--blue);color:#fff;font-weight:700;font-size:14.5px;cursor:pointer}
+.btn:hover{background:#0f56d0}.btn:disabled{opacity:.5;cursor:not-allowed}.btn.alt{background:#fff;color:var(--blue);border:1.5px solid var(--blue)}
+.cols{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}.cols code{background:var(--tint);color:var(--navy-3);padding:4px 10px;border-radius:8px;font-size:13px;font-weight:700}
+.fld{margin-top:18px;max-width:380px}.fld label{display:block;font-size:13px;font-weight:700;color:#41536f;margin-bottom:7px}
+.fld input[type=text],.fld input[type=password]{width:100%;height:44px;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;font-size:15px;background:#fbfdff}
+.fld input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,108,242,.15)}
+.ck{display:flex;gap:9px;align-items:center;margin-top:12px;font-size:13.5px;font-weight:600}.ck input{width:18px;height:18px}
+.hint{font-size:12.5px;color:var(--muted);margin-top:6px}
+.btn.red{background:var(--red)}.btn.red:hover{background:#b91c1c}
+.msg{margin-top:14px;padding:12px 14px;border-radius:12px;font-size:14px;font-weight:600;display:none}
+.msg.ok{display:block;background:var(--gbg);color:var(--green)}.msg.bad{display:block;background:var(--rbg);color:var(--red)}
+.errs{margin:8px 0 0 18px;font-size:13px;font-weight:500}
+.wrapx{overflow:auto;max-height:380px;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:#f3f7fd;color:#41536f;font-size:12.5px;position:sticky;top:0}tr:last-child td{border-bottom:0}
+.cnt{font-weight:600;color:var(--muted);font-size:13px;margin-left:8px}
+.note{color:var(--muted);font-size:14px;padding:16px}
+@media(max-width:600px){.topbar{padding:0 16px}.brand p{display:none}.wrap{padding:20px 14px 50px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><div class="bi">SA</div><div><h1>Smart Attendance</h1><p>Admin Console</p></div></div>
+  <a class="back" href="/admin">Back to Admin</a>
+</header>
+
+<main class="wrap">
+  <div class="title"><h2>Add Faculty</h2><p>Upload a CSV or Excel file. A login is created for every faculty member.</p></div>
+
+  <section class="panel">
+    <h3>Upload faculty file</h3>
+    <p>The first row must be the header. Required columns:</p>
+    <div class="cols"><code>name</code><code>department</code><code>year</code><code>password (optional)</code></div>
+    <p style="margin-top:10px">Name is the login username (for example FAC_I_CSE). Year is I, II, III or IV. If password is empty, the default faculty password is used. An existing name is updated.</p>
+
+    <label class="drop" id="drop" tabindex="0">
+      <b>Click to choose a file or drop it here</b>
+      <span>.csv, .xlsx or .xls</span>
+      <input type="file" id="file" accept=".csv,.xlsx,.xls">
+    </label>
+    <div class="fname" id="fname"></div>
+
+    <div class="fld">
+      <label for="dpw">Default password for faculty</label>
+      <input type="text" id="dpw" value="faculty123" autocomplete="off" minlength="6">
+      <div class="hint">Used for every faculty row that has no password in the file (minimum 6 characters).</div>
+      <label class="ck"><input type="checkbox" id="rst"> Also reset the password of faculty who already exist</label>
+    </div>
+
+    <div id="prevBox" style="display:none;margin-top:16px">
+      <h3>Preview <span class="cnt" id="pcnt"></span></h3>
+      <div class="wrapx"><table><thead id="ph"></thead><tbody id="pb"></tbody></table></div>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="up" disabled>Upload Faculty</button>
+      <button class="btn alt" id="tpl" type="button">Download CSV template</button>
+    </div>
+    <div class="msg" id="msg" role="alert"></div>
+  </section>
+
+  <section class="panel">
+    <h3>Set one password for all faculty</h3>
+    <p>Changes the login password of every faculty account right now.</p>
+    <div class="fld" style="margin-top:0"><label for="allpw">New password for all faculty</label><input type="text" id="allpw" autocomplete="off" placeholder="At least 6 characters"></div>
+    <div class="row"><button class="btn red" id="setall" type="button">Set for all faculty</button></div>
+    <div class="msg" id="msg2" role="alert"></div>
+  </section>
+
+  <section class="panel">
+    <h3>Current faculty <span class="cnt" id="fcnt"></span></h3>
+    <div class="wrapx"><table><thead><tr><th>Name (login)</th><th>Department</th><th>Year</th></tr></thead><tbody id="fl"><tr><td colspan="3" class="note">Loading...</td></tr></tbody></table></div>
+  </section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let ROWS=null;
+
+function show(t,ok,errs){const m=$('msg');m.className='msg '+(ok?'ok':'bad');
+  m.innerHTML=esc(t)+(errs&&errs.length?'<ul class="errs">'+errs.map(e=>`<li>${esc(e)}</li>`).join('')+'</ul>':'')}
+
+function readFile(f){
+  if(!f)return;
+  if(!/\.(csv|xlsx|xls)$/i.test(f.name)){show('Please choose a .csv, .xlsx or .xls file.',false);return}
+  $('fname').textContent=f.name;$('msg').className='msg';
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:false})
+        .filter(r=>r.some(c=>String(c).trim()!==''));
+      if(rows.length<2){ROWS=null;$('up').disabled=true;$('prevBox').style.display='none';show('The file has no faculty rows.',false);return}
+      ROWS=rows;preview();$('up').disabled=false;
+    }catch(x){ROWS=null;$('up').disabled=true;show('Could not read this file.',false)}
+  };
+  r.readAsArrayBuffer(f);
+}
+function preview(){
+  $('prevBox').style.display='';
+  $('pcnt').textContent=(ROWS.length-1)+' row(s)';
+  $('ph').innerHTML='<tr>'+ROWS[0].map(h=>`<th>${esc(h)}</th>`).join('')+'</tr>';
+  $('pb').innerHTML=ROWS.slice(1,11).map(r=>'<tr>'+ROWS[0].map((_,i)=>`<td>${esc(i===3&&/pass/i.test(ROWS[0][i])&&r[i]?'••••••':r[i])}</td>`).join('')+'</tr>').join('')
+    +(ROWS.length>11?`<tr><td colspan="${ROWS[0].length}" class="note">Showing first 10 rows...</td></tr>`:'');
+}
+$('file').onchange=e=>readFile(e.target.files[0]);
+const d=$('drop');
+['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('on')}));
+['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('on')}));
+d.addEventListener('drop',e=>readFile(e.dataTransfer.files[0]));
+d.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('file').click()}});
+
+$('up').onclick=async()=>{
+  if(!ROWS)return;
+  if($('dpw').value.trim().length<6){show('Default password must contain at least 6 characters.',false);return}$('up').disabled=true;$('up').textContent='Uploading...';
+  try{
+    const r=await fetch('/upload_faculty_csv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rows:ROWS,default_password:$('dpw').value.trim(),reset_existing:$('rst').checked})});
+    const j=await r.json();
+    show(j.success?`${j.message}${j.skipped?` ${j.skipped} skipped.`:''}`:(j.message||'Upload failed.'),j.success,j.errors);
+    if(j.success){loadList();$('file').value='';$('fname').textContent='';ROWS=null;$('prevBox').style.display='none';$('up').textContent='Upload Faculty';return}
+  }catch(x){show('Cannot reach the server.',false)}
+  $('up').disabled=!ROWS;$('up').textContent='Upload Faculty';
+};
+$('tpl').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['name,department,year,password\nFAC_I_CSE,CSE,I,\nFAC_II_ECE,ECE,II,mypass123\n'],{type:'text/csv'}));
+  a.download='faculty_template.csv';a.click();
+};
+$('setall').onclick=async()=>{
+  const m=$('msg2'),pw=$('allpw').value.trim();
+  if(pw.length<6){m.className='msg bad';m.textContent='Password must contain at least 6 characters.';return}
+  if(!confirm('Change the password of ALL faculty accounts?'))return;
+  try{
+    const j=await (await fetch('/api/faculty_set_password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw})})).json();
+    m.className='msg '+(j.success?'ok':'bad');m.textContent=j.message;if(j.success)$('allpw').value='';
+  }catch(x){m.className='msg bad';m.textContent='Cannot reach the server.'}
+};
+async function loadList(){
+  const j=await (await fetch('/api/faculty_list')).json();
+  if(!j.success){$('fl').innerHTML=`<tr><td colspan="3" class="note">${esc(j.message)}</td></tr>`;return}
+  $('fcnt').textContent=j.faculty.length+' total';
+  $('fl').innerHTML=j.faculty.length?j.faculty.map(f=>`<tr><td>${esc(f.name)}</td><td>${esc(f.department)}</td><td>${esc(f.year)}</td></tr>`).join(''):'<tr><td colspan="3" class="note">No faculty added yet.</td></tr>';
+}
+loadList();
+</script>
+</body>
+</html>

@@ -2,31 +2,47 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 import sqlite3
 import os
 import re
-import calendar
-import shutil
 from datetime import datetime
 import cv2
+from PIL import Image
 import base64
 import numpy as np
 import json
 import hmac
 import threading
 import webbrowser
-from db import connect
+from datetime import timedelta, timezone
 
-# Local development only: reads a .env file if python-dotenv is installed.
-# On Render the real Environment variables are used, so this is optional.
+# Load variables from a local .env file (ignored if python-dotenv is missing).
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
 
+# Turso is called over its HTTP API with `requests` (pure Python, no wheels needed).
+import requests
+
+TURSO_URL = os.environ.get("TURSO_DATABASE_URL", "").strip()
+TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
+USE_TURSO = bool(TURSO_URL and TURSO_TOKEN)
+TURSO_HTTP = TURSO_URL.replace("libsql://", "https://", 1).rstrip("/")
+
+IntegrityError = sqlite3.IntegrityError
+OperationalError = sqlite3.OperationalError
+
+# Render runs in UTC; attendance periods are in local (India) time by default.
+TZ_OFFSET_MINUTES = int(os.environ.get("TZ_OFFSET_MINUTES", "330"))
+
+
+def now_local():
+    return datetime.now(timezone(timedelta(minutes=TZ_OFFSET_MINUTES))).replace(tzinfo=None)
+
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
 
 # Key the kiosk page sends so it can scan faces without an admin login.
-# Set a real value:  set KIOSK_KEY=your-secret   (Windows)  /  export KIOSK_KEY=your-secret
 KIOSK_KEY = os.environ.get("KIOSK_KEY", "change-this-key")
 
 # Re-read template files when they change (needed because debug=False).
@@ -35,12 +51,11 @@ app.jinja_env.auto_reload = True
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# On Render, attach a Persistent Disk (e.g. mount path /var/data) and set
-# DATA_DIR=/var/data so the face data survives redeploys.
+# On Render, attach a Persistent Disk (e.g. /var/data) and set DATA_DIR=/var/data
+# so face photos + trained model survive redeploys.
 DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Only used when DATABASE_URL is NOT set (local SQLite fallback).
 DATABASE = os.path.join(DATA_DIR, "attendance.db")
 
 FACE_DIR = os.path.join(DATA_DIR, "faces")
@@ -51,32 +66,141 @@ os.makedirs(FACE_DIR, exist_ok=True)
 # =========================================================
 
 FACE_CASCADE_PATH = os.path.join(
-    BASE_DIR,
-    "haarcascades",
-    "haarcascade_frontalface_default.xml"
+    BASE_DIR, "haarcascades", "haarcascade_frontalface_default.xml"
 )
 
 if not os.path.isfile(FACE_CASCADE_PATH):
-    raise FileNotFoundError(
-        f"Face cascade file not found: {FACE_CASCADE_PATH}"
-    )
+    raise FileNotFoundError(f"Face cascade file not found: {FACE_CASCADE_PATH}")
 
 face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
 
 if face_cascade.empty():
-    raise RuntimeError(
-        f"Failed to load face cascade: {FACE_CASCADE_PATH}"
-    )
+    raise RuntimeError(f"Failed to load face cascade: {FACE_CASCADE_PATH}")
 
 print("FACE CASCADE LOADED:", FACE_CASCADE_PATH)
 
 # =========================================================
-# DATABASE CONNECTION
-# (db.py uses Postgres when DATABASE_URL is set, else SQLite)
+# DATABASE CONNECTION (Turso or local SQLite)
 # =========================================================
 
+
+class Row(dict):
+    """Behaves like sqlite3.Row: row["col"], row[0], dict(row)."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+_http = requests.Session()
+
+
+def _to_arg(v):
+    if v is None:
+        return {"type": "null"}
+    if isinstance(v, bool):
+        return {"type": "integer", "value": str(int(v))}
+    if isinstance(v, int):
+        return {"type": "integer", "value": str(v)}
+    if isinstance(v, float):
+        return {"type": "float", "value": v}
+    return {"type": "text", "value": str(v)}
+
+
+def _from_val(v):
+    t = v.get("type")
+    if t == "null":
+        return None
+    if t == "integer":
+        return int(v["value"])
+    if t == "float":
+        return float(v["value"])
+    if t == "blob":
+        return base64.b64decode(v.get("base64", "") + "==")
+    return v.get("value")
+
+
+class _Cursor:
+    def __init__(self, cols, rows, lastrowid=None):
+        self.cols = cols
+        self.rows = rows
+        self.lastrowid = lastrowid
+        self.pos = 0
+
+    def fetchone(self):
+        if self.pos >= len(self.rows):
+            return None
+        row = self.rows[self.pos]
+        self.pos += 1
+        return Row(zip(self.cols, row))
+
+    def fetchall(self):
+        out = [Row(zip(self.cols, r)) for r in self.rows[self.pos:]]
+        self.pos = len(self.rows)
+        return out
+
+
+class _Conn:
+    """Turso over HTTP. Each statement is sent (and saved) immediately."""
+
+    def execute(self, sql, params=()):
+        body = {"requests": [
+            {"type": "execute",
+             "stmt": {"sql": sql, "args": [_to_arg(p) for p in params]}},
+            {"type": "close"},
+        ]}
+        try:
+            resp = _http.post(
+                TURSO_HTTP + "/v2/pipeline",
+                json=body,
+                headers={"Authorization": "Bearer " + TURSO_TOKEN},
+                timeout=30,
+            )
+        except requests.RequestException as e:
+            raise sqlite3.OperationalError("Cannot reach Turso: " + str(e))
+
+        if resp.status_code != 200:
+            raise sqlite3.OperationalError(
+                f"Turso HTTP {resp.status_code}: {resp.text[:200]}"
+            )
+
+        first = resp.json()["results"][0]
+
+        if first.get("type") == "error":
+            msg = first["error"].get("message", "Turso error")
+            if "constraint" in msg.lower():
+                raise sqlite3.IntegrityError(msg)
+            raise sqlite3.OperationalError(msg)
+
+        result = first["response"]["result"]
+        cols = [c["name"] for c in result.get("cols", [])]
+        rows = [[_from_val(v) for v in r] for r in result.get("rows", [])]
+        return _Cursor(cols, rows, result.get("last_insert_rowid"))
+
+    def executescript(self, script):
+        for stmt in script.split(";"):
+            if stmt.strip():
+                self.execute(stmt)
+
+    def commit(self):
+        pass  # every statement is already committed
+
+    def rollback(self):
+        pass
+
+    def close(self):
+        pass
+
+
 def get_db_connection():
-    return connect(DATABASE)
+    if USE_TURSO:
+        return _Conn()
+
+    # Local fallback (no Turso env vars set)
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def ensure_student_contact_columns():
@@ -122,12 +246,10 @@ def preprocess_face(gray_face):
 
 
 def train_face_model():
-
     recognizer = cv2.face.LBPHFaceRecognizer_create()
 
     faces = []
     labels = []
-
     label_map = {}
     next_label = 1
 
@@ -135,7 +257,6 @@ def train_face_model():
         return False, "Face folder not found."
 
     for student_id in sorted(os.listdir(FACE_DIR)):
-
         student_folder = os.path.join(FACE_DIR, student_id)
 
         if not os.path.isdir(student_folder):
@@ -151,20 +272,11 @@ def train_face_model():
 
         current_label = next_label
         next_label += 1
-
         label_map[str(current_label)] = str(student_id)
 
         for image_name in image_files:
-
-            image_path = os.path.join(
-                student_folder,
-                image_name
-            )
-
-            image = cv2.imread(
-                image_path,
-                cv2.IMREAD_GRAYSCALE
-            )
+            image_path = os.path.join(student_folder, image_name)
+            image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
             if image is None:
                 continue
@@ -175,87 +287,13 @@ def train_face_model():
     if not faces:
         return False, "No face images found."
 
-    recognizer.train(
-        faces,
-        np.array(labels, dtype=np.int32)
-    )
-
+    recognizer.train(faces, np.array(labels, dtype=np.int32))
     recognizer.write(TRAINER_PATH)
 
     with open(FACE_LABELS_PATH, "w") as f:
         json.dump(label_map, f, indent=4)
 
     return True, f"Face model trained with {len(faces)} images."
-
-
-# =========================================================
-# KEEP FACE IMAGES IN THE DATABASE
-# Render wipes the disk on every redeploy / restart, so every face image is
-# also stored in the face_samples table and written back to faces/ at startup.
-# =========================================================
-
-def save_face_sample_to_db(student_id, number, file_path):
-    """Store a copy of a saved face image in the database."""
-    try:
-        with open(file_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("ascii")
-
-        db = get_db_connection()
-        try:
-            db.execute(
-                "DELETE FROM face_samples WHERE student_id = ? AND number = ?",
-                (str(student_id), int(number))
-            )
-            db.execute(
-                "INSERT INTO face_samples (student_id, number, image) VALUES (?, ?, ?)",
-                (str(student_id), int(number), encoded)
-            )
-            db.commit()
-        finally:
-            db.close()
-        return True
-
-    except Exception as e:
-        print("FACE SAMPLE DB SAVE ERROR:", e)
-        return False
-
-
-def restore_faces_from_db():
-    """Write face images from the database back into faces/ and retrain if needed."""
-    db = get_db_connection()
-    try:
-        rows = db.execute(
-            "SELECT student_id, number, image FROM face_samples "
-            "ORDER BY student_id, number"
-        ).fetchall()
-    finally:
-        db.close()
-
-    restored = 0
-    for r in rows:
-        student_id = str(r["student_id"])
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", student_id):
-            continue
-
-        path = os.path.join(get_face_folder(student_id), f"{int(r['number'])}.jpg")
-        if os.path.exists(path):
-            continue
-
-        with open(path, "wb") as f:
-            f.write(base64.b64decode(r["image"]))
-        restored += 1
-
-    print(f"FACE RESTORE: {restored} image(s) restored, {len(rows)} stored in database")
-
-    # trainer.yml is also lost on redeploy (or may be an old copy from git),
-    # so rebuild it from the images whenever images were restored
-    if rows and (
-        restored > 0
-        or not (os.path.exists(TRAINER_PATH) and os.path.exists(FACE_LABELS_PATH))
-    ):
-        ok, msg = train_face_model()
-        print("FACE RESTORE TRAIN:", ok, msg)
-
 
 # =========================================================
 # LOGIN
@@ -283,24 +321,18 @@ def login():
             db.close()
 
             if user:
-
                 session["user_id"] = user["id"]
                 session["username"] = user["username"]
                 session["role"] = user["role"]
 
                 if user["role"] == "admin":
                     redirect_url = "/admin"
-
-                elif user["role"] == "representative":
-                    redirect_url = "/representative"
-
+                elif user["role"] in ("representative", "faculty"):
+                    redirect_url = "/staff"
                 else:
                     redirect_url = "/student"
 
-                return jsonify({
-                    "success": True,
-                    "redirect": redirect_url
-                })
+                return jsonify({"success": True, "redirect": redirect_url})
 
             return jsonify({
                 "success": False,
@@ -308,9 +340,7 @@ def login():
             })
 
         except Exception as e:
-
             print("LOGIN ERROR:", e)
-
             return jsonify({
                 "success": False,
                 "message": "Database error: " + str(e)
@@ -425,7 +455,7 @@ def register():
             "redirect": "/face_enrollment"
         })
 
-    except sqlite3.IntegrityError as e:
+    except IntegrityError as e:
         if db is not None:
             try:
                 db.rollback()
@@ -458,24 +488,9 @@ def register():
 
 @app.route("/admin")
 def admin():
-
     if session.get("role") != "admin":
         return "Access Denied"
-
     return render_template("admin.html")
-
-
-# =========================================================
-# MANUAL ATTENDANCE PAGE (separate page, opened from the admin dashboard)
-# =========================================================
-
-@app.route("/manual_attendance")
-def manual_attendance():
-
-    if not require_attendance_role():
-        return "Access Denied", 403
-
-    return render_template("manual_attendance.html")
 
 
 # =========================================================
@@ -561,8 +576,6 @@ def capture_face():
                 "success": False,
                 "message": "Failed to save face image."
             }), 500
-
-        save_face_sample_to_db(student_id, sample_number, file_path)
 
         if sample_number >= 20:
             try:
@@ -725,8 +738,6 @@ def api_face_enrollment():
                 "message": "Failed to save face image."
             }), 500
 
-        save_face_sample_to_db(student_id, image_number, image_path)
-
         completed = image_number >= 20
 
         if completed:
@@ -767,10 +778,8 @@ def api_face_enrollment():
 
 @app.route("/upload_students")
 def upload_students():
-
     if session.get("role") != "admin":
         return "Access Denied"
-
     return render_template("upload_students.html")
 
 
@@ -782,13 +791,9 @@ def upload_students():
 def upload_students_csv():
 
     if session.get("role") != "admin":
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
-
         data = request.get_json()
 
         if not data or "rows" not in data:
@@ -805,23 +810,16 @@ def upload_students_csv():
                 "message": "CSV file must contain student data."
             }), 400
 
-        # CHECK HEADERS
         headers = [
             str(h).strip().lower().replace(" ", "_")
             for h in rows[0]
         ]
 
         required_headers = [
-            "student_id",
-            "name",
-            "username",
-            "password",
-            "year",
-            "department"
+            "student_id", "name", "username", "password", "year", "department"
         ]
 
         if headers != required_headers:
-
             return jsonify({
                 "success": False,
                 "message":
@@ -835,20 +833,14 @@ def upload_students_csv():
         skipped = 0
         errors = []
 
-        # INSERT STUDENTS
         for row_number, row in enumerate(rows[1:], start=2):
 
             if not row or not any(str(cell).strip() for cell in row):
                 continue
 
             if len(row) < 6:
-
                 skipped += 1
-
-                errors.append(
-                    f"Row {row_number}: Not enough columns"
-                )
-
+                errors.append(f"Row {row_number}: Not enough columns")
                 continue
 
             student_id = str(row[0]).strip()
@@ -858,97 +850,45 @@ def upload_students_csv():
             year = str(row[4]).strip()
             department = str(row[5]).strip()
 
-            if not all([
-                student_id,
-                name,
-                username,
-                password,
-                year,
-                department
-            ]):
-
+            if not all([student_id, name, username, password, year, department]):
                 skipped += 1
-
-                errors.append(
-                    f"Row {row_number}: Missing required value"
-                )
-
+                errors.append(f"Row {row_number}: Missing required value")
                 continue
 
             try:
-
-                # Insert student
                 db.execute("""
                     INSERT INTO students
-                    (
-                        student_id,
-                        name,
-                        username,
-                        password,
-                        year,
-                        department
-                    )
+                    (student_id, name, username, password, year, department)
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    student_id,
-                    name,
-                    username,
-                    password,
-                    year,
-                    department
-                ))
+                """, (student_id, name, username, password, year, department))
 
-                # Insert login account
                 db.execute("""
-                    INSERT INTO users
-                    (
-                        username,
-                        password,
-                        role
-                    )
+                    INSERT INTO users (username, password, role)
                     VALUES (?, ?, ?)
-                """, (
-                    username,
-                    password,
-                    "student"
-                ))
+                """, (username, password, "student"))
 
                 added += 1
 
-            except sqlite3.IntegrityError:
-
+            except IntegrityError:
                 skipped += 1
-
                 errors.append(
-                    f"Row {row_number}: "
-                    f"Student ID or username already exists"
+                    f"Row {row_number}: Student ID or username already exists"
                 )
 
         db.commit()
         db.close()
 
         return jsonify({
-
             "success": True,
-
             "added": added,
-
             "skipped": skipped,
-
             "errors": errors,
-
-            "message":
-            f"{added} student(s) added successfully."
+            "message": f"{added} student(s) added successfully."
         })
 
     except Exception as e:
-
         print("CSV UPLOAD ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -959,13 +899,9 @@ def upload_students_csv():
 def add_student():
 
     if session.get("role") != "admin":
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
-
         data = request.get_json()
 
         student_id = str(data.get("student_id", "")).strip()
@@ -975,15 +911,7 @@ def add_student():
         year = str(data.get("year", "")).strip()
         department = str(data.get("department", "")).strip()
 
-        # VALIDATION
-        if not all([
-            student_id,
-            name,
-            username,
-            password,
-            year,
-            department
-        ]):
+        if not all([student_id, name, username, password, year, department]):
             return jsonify({
                 "success": False,
                 "message": "Please fill all fields."
@@ -991,71 +919,40 @@ def add_student():
 
         db = get_db_connection()
 
-        # CHECK STUDENT ID
+        print("DATABASE USED:", TURSO_URL if USE_TURSO else DATABASE)
+
         existing_student = db.execute("""
-            SELECT id
-            FROM students
-            WHERE student_id = ?
+            SELECT id FROM students WHERE student_id = ?
         """, (student_id,)).fetchone()
 
         if existing_student:
             db.close()
-
             return jsonify({
                 "success": False,
                 "message": "Student ID already exists."
             }), 400
 
-        # CHECK USERNAME
         existing_user = db.execute("""
-            SELECT id
-            FROM users
-            WHERE username = ?
+            SELECT id FROM users WHERE username = ?
         """, (username,)).fetchone()
 
         if existing_user:
             db.close()
-
             return jsonify({
                 "success": False,
                 "message": "Username already exists."
             }), 400
 
-        # INSERT STUDENT
         db.execute("""
             INSERT INTO students
-            (
-                student_id,
-                name,
-                username,
-                password,
-                year,
-                department
-            )
+            (student_id, name, username, password, year, department)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            student_id,
-            name,
-            username,
-            password,
-            year,
-            department
-        ))
+        """, (student_id, name, username, password, year, department))
 
-        # INSERT LOGIN ACCOUNT
         db.execute("""
-            INSERT INTO users
-            (
-                username,
-                password,
-                role
-            )
+            INSERT INTO users (username, password, role)
             VALUES (?, ?, ?)
-        """, (
-            username,
-            password,
-            "student"
-        ))
+        """, (username, password, "student"))
 
         db.commit()
         db.close()
@@ -1066,13 +963,8 @@ def add_student():
         })
 
     except Exception as e:
-
         print("ADD STUDENT ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -1086,17 +978,10 @@ def view_students():
         return "Access Denied"
 
     try:
-
         db = get_db_connection()
 
         students = db.execute("""
-            SELECT
-                id,
-                student_id,
-                name,
-                username,
-                year,
-                department
+            SELECT id, student_id, name, username, year, department
             FROM students
             ORDER BY id ASC
         """).fetchall()
@@ -1105,15 +990,10 @@ def view_students():
 
         students = [dict(student) for student in students]
 
-        return render_template(
-            "view_students.html",
-            students=students
-        )
+        return render_template("view_students.html", students=students)
 
     except Exception as e:
-
         print("VIEW STUDENTS ERROR:", e)
-
         return "Database error: " + str(e)
 
 
@@ -1125,42 +1005,24 @@ def view_students():
 def api_students():
 
     if session.get("role") != "admin":
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
-
         db = get_db_connection()
 
         students = db.execute("""
-            SELECT
-                id,
-                student_id,
-                name,
-                username,
-                year,
-                department
+            SELECT id, student_id, name, username, year, department
             FROM students
             ORDER BY id ASC
         """).fetchall()
 
         db.close()
 
-        return jsonify([
-            dict(student)
-            for student in students
-        ])
+        return jsonify([dict(student) for student in students])
 
     except Exception as e:
-
         print("GET STUDENTS ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -1171,14 +1033,9 @@ def api_students():
 def update_student():
 
     if session.get("role") != "admin":
-
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
-
         data = request.get_json()
 
         student_db_id = data.get("id")
@@ -1187,16 +1044,13 @@ def update_student():
         year = data.get("year", "").strip()
         department = data.get("department", "").strip()
 
-        # VALIDATION
         if not student_db_id:
-
             return jsonify({
                 "success": False,
                 "message": "Student ID is missing."
             }), 400
 
         if not name or not username or not year or not department:
-
             return jsonify({
                 "success": False,
                 "message": "Please fill all fields."
@@ -1204,17 +1058,12 @@ def update_student():
 
         db = get_db_connection()
 
-        # FIND EXISTING STUDENT
         student = db.execute("""
-            SELECT *
-            FROM students
-            WHERE id = ?
+            SELECT * FROM students WHERE id = ?
         """, (student_db_id,)).fetchone()
 
         if not student:
-
             db.close()
-
             return jsonify({
                 "success": False,
                 "message": "Student not found."
@@ -1222,69 +1071,41 @@ def update_student():
 
         old_username = student["username"]
 
-        # CHECK USERNAME
         existing_user = db.execute("""
-            SELECT *
-            FROM users
-            WHERE username = ?
+            SELECT * FROM users WHERE username = ?
         """, (username,)).fetchone()
 
         if existing_user and username != old_username:
-
             db.close()
-
             return jsonify({
                 "success": False,
                 "message": "Username already exists."
             }), 400
 
-        # UPDATE STUDENTS TABLE
         db.execute("""
             UPDATE students
-            SET
-                name = ?,
-                username = ?,
-                year = ?,
-                department = ?
+            SET name = ?, username = ?, year = ?, department = ?
             WHERE id = ?
-        """, (
-            name,
-            username,
-            year,
-            department,
-            student_db_id
-        ))
+        """, (name, username, year, department, student_db_id))
 
-        # UPDATE USERS TABLE
         db.execute("""
             UPDATE users
             SET username = ?
             WHERE username = ?
             AND role = 'student'
-        """, (
-            username,
-            old_username
-        ))
+        """, (username, old_username))
 
         db.commit()
         db.close()
 
         return jsonify({
-
             "success": True,
-
-            "message":
-            f"{name} updated successfully."
+            "message": f"{name} updated successfully."
         })
 
     except Exception as e:
-
         print("UPDATE STUDENT ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -1295,20 +1116,13 @@ def update_student():
 def delete_student():
 
     if session.get("role") != "admin":
-
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
-
         data = request.get_json()
-
         student_db_id = data.get("id")
 
         if not student_db_id:
-
             return jsonify({
                 "success": False,
                 "message": "Student ID is missing."
@@ -1316,17 +1130,12 @@ def delete_student():
 
         db = get_db_connection()
 
-        # FIND STUDENT
         student = db.execute("""
-            SELECT *
-            FROM students
-            WHERE id = ?
+            SELECT * FROM students WHERE id = ?
         """, (student_db_id,)).fetchone()
 
         if not student:
-
             db.close()
-
             return jsonify({
                 "success": False,
                 "message": "Student not found."
@@ -1335,48 +1144,25 @@ def delete_student():
         username = student["username"]
         name = student["name"]
 
-        # DELETE STUDENT
-        db.execute("""
-            DELETE FROM students
-            WHERE id = ?
-        """, (student_db_id,))
+        db.execute("DELETE FROM students WHERE id = ?", (student_db_id,))
 
-        # DELETE LOGIN ACCOUNT
         db.execute("""
             DELETE FROM users
             WHERE username = ?
             AND role = 'student'
         """, (username,))
 
-        # remove this student's stored face images too
-        db.execute(
-            "DELETE FROM face_samples WHERE student_id = ?",
-            (str(student["student_id"]),)
-        )
-        shutil.rmtree(
-            os.path.join(FACE_DIR, str(student["student_id"])),
-            ignore_errors=True
-        )
-
         db.commit()
         db.close()
 
         return jsonify({
-
             "success": True,
-
-            "message":
-            f"{name} deleted successfully."
+            "message": f"{name} deleted successfully."
         })
 
     except Exception as e:
-
         print("DELETE STUDENT ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -1444,7 +1230,7 @@ def sort_periods(periods):
 
 
 def require_attendance_role():
-    return session.get("role") in ["admin", "representative"]
+    return session.get("role") in ["admin", "representative", "faculty"]
 
 
 def kiosk_or_staff():
@@ -1460,10 +1246,7 @@ def get_students():
     """Return students for the selected year and department."""
 
     if not require_attendance_role():
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     year = request.args.get("year", "").strip()
     department = request.args.get("department", "").strip()
@@ -1482,10 +1265,7 @@ def get_students():
         "iv": ["IV", "4th", "4th Year", "4"]
     }
 
-    possible_years = year_map.get(
-        year.lower(),
-        [year]
-    )
+    possible_years = year_map.get(year.lower(), [year])
 
     try:
         db = get_db_connection()
@@ -1496,9 +1276,7 @@ def get_students():
             f"""
             SELECT student_id, name
             FROM students
-            WHERE LOWER(TRIM(year)) IN (
-                {placeholders}
-            )
+            WHERE LOWER(TRIM(year)) IN ({placeholders})
             AND LOWER(TRIM(department)) = LOWER(TRIM(?))
             ORDER BY name COLLATE NOCASE
             """,
@@ -1510,22 +1288,14 @@ def get_students():
         return jsonify({
             "success": True,
             "students": [
-                {
-                    "roll_no": row["student_id"],
-                    "name": row["name"]
-                }
+                {"roll_no": row["student_id"], "name": row["name"]}
                 for row in rows
             ]
         })
 
     except Exception as e:
-
         print("GET STUDENTS ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route("/api/manual_periods")
@@ -1574,10 +1344,7 @@ def manual_periods():
 
     except Exception as e:
         print("MANUAL PERIODS ERROR:", e)
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route("/api/manual_subjects")
@@ -1627,10 +1394,7 @@ def manual_subjects():
 
     except Exception as e:
         print("MANUAL SUBJECTS ERROR:", e)
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route("/api/admin_timetable")
@@ -1745,7 +1509,7 @@ def save_attendance():
                 "message": "Selected period and subject do not match the uploaded timetable."
             }), 400
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = now_local().strftime("%Y-%m-%d %H:%M:%S")
         saved = 0
         skipped = 0
 
@@ -1808,10 +1572,7 @@ def save_attendance():
 
     except Exception as e:
         print("SAVE ATTENDANCE ERROR:", e)
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -1820,10 +1581,8 @@ def save_attendance():
 
 @app.route("/upload_timetable")
 def upload_timetable():
-
     if session.get("role") != "admin":
         return "Access Denied", 403
-
     return render_template("upload_timetable.html")
 
 
@@ -1835,10 +1594,7 @@ def upload_timetable():
 def upload_timetable_csv():
 
     if session.get("role") != "admin":
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
         data = request.get_json(silent=True)
@@ -1928,12 +1684,10 @@ def upload_timetable_csv():
                     INSERT INTO timetable
                     (year, department, day, time, subject, faculty)
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    year, department, day, time_value, subject, faculty
-                ))
+                """, (year, department, day, time_value, subject, faculty))
                 added += 1
 
-            except sqlite3.IntegrityError as e:
+            except IntegrityError as e:
                 skipped += 1
                 errors.append(f"Row {row_number}: {str(e)}")
 
@@ -1950,10 +1704,7 @@ def upload_timetable_csv():
 
     except Exception as e:
         print("TIMETABLE UPLOAD ERROR:", e)
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # =========================================================
@@ -1962,13 +1713,7 @@ def upload_timetable_csv():
 
 @app.route("/representative")
 def representative():
-
-    if session.get("role") != "representative":
-        return "Access Denied"
-
-    return """
-    <h1>Representative Dashboard</h1>
-    """
+    return redirect(url_for("staff_home"))
 
 
 # ------------------------------------------------------------
@@ -1976,15 +1721,12 @@ def representative():
 # ------------------------------------------------------------
 @app.route("/student")
 def student():
-    # 1. Must be logged in
     if "username" not in session:
         return redirect(url_for("login"))
 
-    # 2. Must be a student (not admin / representative)
     if session.get("role") != "student":
         return redirect(url_for("login"))
 
-    # 3. Fetch this student's row using the logged-in username
     conn = get_db_connection()
 
     # Support databases created before the gender column was added.
@@ -2012,7 +1754,6 @@ def student():
 
     conn.close()
 
-    # 4. If for some reason there's no matching student row, bounce to login
     if student_row is None:
         return redirect(url_for("login"))
 
@@ -2021,8 +1762,6 @@ def student():
 
 # ------------------------------------------------------------
 # /api/timetable?date=YYYY-MM-DD
-# Timetable for that date in chronological order, each period carrying the
-# student's attendance status ("Present" / "Absent" / null = not marked yet).
 # ------------------------------------------------------------
 
 @app.route("/api/timetable")
@@ -2078,8 +1817,8 @@ def api_timetable():
                 key = (str(a["time"]).strip().lower(),
                        str(a["subject"]).strip().lower())
                 status_map[key] = str(a["status"]).strip().capitalize()
-        except sqlite3.OperationalError:
-            pass  # attendance table not created yet (nothing marked so far)
+        except OperationalError:
+            pass  # attendance table not created yet
 
         periods = []
         for row in rows:
@@ -2106,7 +1845,6 @@ def api_timetable():
 
 # ------------------------------------------------------------
 # /api/attendance_summary
-# Totals for the logged-in student. One marked period = one hour.
 # ------------------------------------------------------------
 
 @app.route("/api/attendance_summary")
@@ -2138,7 +1876,7 @@ def api_attendance_summary():
                         present = r["total"]
                     elif r["status"] == "absent":
                         absent = r["total"]
-            except sqlite3.OperationalError:
+            except OperationalError:
                 pass  # no attendance table yet
 
         total = present + absent
@@ -2160,7 +1898,6 @@ def api_attendance_summary():
 
 # ------------------------------------------------------------
 # /api/attendance_report
-# Summary + subject-wise totals + full record log for the logged-in student.
 # ------------------------------------------------------------
 
 @app.route("/api/attendance_report")
@@ -2190,7 +1927,7 @@ def api_attendance_report():
                 WHERE student_id = ?
                 ORDER BY date DESC, marked_at DESC
             """, (student["student_id"],)).fetchall()
-        except sqlite3.OperationalError:
+        except OperationalError:
             return jsonify(empty)   # attendance table not created yet
 
         records, subjects = [], {}
@@ -2205,9 +1942,11 @@ def api_attendance_report():
             s = subjects.setdefault(subject, {"subject": subject, "present": 0,
                                               "absent": 0, "total": 0})
             if status == "Present":
-                s["present"] += 1; present += 1
+                s["present"] += 1
+                present += 1
             elif status == "Absent":
-                s["absent"] += 1; absent += 1
+                s["absent"] += 1
+                absent += 1
             s["total"] = s["present"] + s["absent"]
 
         total = present + absent
@@ -2232,29 +1971,16 @@ def api_attendance_report():
 @app.route("/train_faces", methods=["POST"])
 def train_faces():
 
-    if not require_attendance_role():
-        return jsonify({
-            "success": False,
-            "message": "Access Denied"
-        }), 403
+    if session.get("role") not in ["admin", "representative"]:
+        return jsonify({"success": False, "message": "Access Denied"}), 403
 
     try:
-
         success, message = train_face_model()
-
-        return jsonify({
-            "success": success,
-            "message": message
-        })
+        return jsonify({"success": success, "message": message})
 
     except Exception as e:
-
         print("FACE TRAINING ERROR:", e)
-
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # ------------------------------------------------------------
@@ -2263,9 +1989,7 @@ def train_faces():
 
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
-
     session.clear()
-
     return redirect(url_for("login"))
 
 
@@ -2275,14 +1999,10 @@ def logout():
 
 def recognize_face(frame):
     """
-    Recognize a face.
-
-    Returns (student_dict, confidence, error), e.g.
-        ({"student_id": "...", "name": "...", "year": "...", "department": "..."}, 42.5, None)
-        (None, 72.3, "Unknown face.")
+    Returns (student_dict, confidence, error).
+    Failure example: (None, 72.3, "Unknown face.")
     """
 
-    # CHECK MODEL FILES
     if not os.path.exists(TRAINER_PATH):
         return None, None, "Face model not trained."
 
@@ -2290,118 +2010,64 @@ def recognize_face(frame):
         return None, None, "Face label mapping not found."
 
     try:
-
-        # LOAD LABEL MAP
-        with open(
-            FACE_LABELS_PATH,
-            "r",
-            encoding="utf-8"
-        ) as f:
+        with open(FACE_LABELS_PATH, "r", encoding="utf-8") as f:
             label_map = json.load(f)
 
-        # LOAD LBPH MODEL
         recognizer = cv2.face.LBPHFaceRecognizer_create()
         recognizer.read(TRAINER_PATH)
 
-        # VALIDATE FRAME
         if frame is None:
             return None, None, "Invalid camera frame."
 
-        # CONVERT TO GRAYSCALE
-        gray = cv2.cvtColor(
-            frame,
-            cv2.COLOR_BGR2GRAY
-        )
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # DETECT FACE
         faces = face_cascade.detectMultiScale(
-            gray,
-            scaleFactor=1.2,
-            minNeighbors=5,
-            minSize=FACE_MIN_SIZE
+            gray, scaleFactor=1.2, minNeighbors=5, minSize=FACE_MIN_SIZE
         )
 
         if len(faces) == 0:
             return None, None, "No face detected."
 
-        # USE LARGEST FACE
-        x, y, w, h = max(
-            faces,
-            key=lambda item: item[2] * item[3]
-        )
-
-        face = gray[
-            y:y + h,
-            x:x + w
-        ]
+        # Use the largest face
+        x, y, w, h = max(faces, key=lambda item: item[2] * item[3])
+        face = gray[y:y + h, x:x + w]
 
         if face.size == 0:
             return None, None, "Invalid face region."
 
-        # LBPH PREDICTION
         face = preprocess_face(face)
-
         label, confidence = recognizer.predict(face)
-
         confidence = float(confidence)
 
-        print(
-            f"FACE PREDICTION -> "
-            f"label={label}, "
-            f"confidence={confidence:.2f}"
-        )
+        print(f"FACE PREDICTION -> label={label}, confidence={confidence:.2f}")
 
-        # GET STUDENT ID FROM LABEL
-        student_id = label_map.get(
-            str(label)
-        )
+        student_id = label_map.get(str(label))
 
         if not student_id:
-            return (
-                None,
-                confidence,
-                "Unknown face."
-            )
+            return None, confidence, "Unknown face."
 
-        # LBPH: LOWER CONFIDENCE = BETTER MATCH
+        # LBPH: lower confidence = better match
         if confidence > CONFIDENCE_THRESHOLD:
-            return (
-                None,
-                confidence,
-                "Unknown face."
-            )
+            return None, confidence, "Unknown face."
 
-        # FIND STUDENT IN DATABASE
         db = get_db_connection()
 
         try:
-
             student = db.execute(
                 """
-                SELECT
-                    student_id,
-                    name,
-                    year,
-                    department
+                SELECT student_id, name, year, department
                 FROM students
                 WHERE student_id = ?
                 LIMIT 1
                 """,
                 (str(student_id),)
             ).fetchone()
-
         finally:
             db.close()
 
-        # STUDENT NOT FOUND
         if not student:
-            return (
-                None,
-                confidence,
-                "Student not found."
-            )
+            return None, confidence, "Student not found."
 
-        # SUCCESS
         student_data = {
             "student_id": student["student_id"],
             "name": student["name"],
@@ -2409,29 +2075,13 @@ def recognize_face(frame):
             "department": student["department"]
         }
 
-        print(
-            "FACE RECOGNIZED:",
-            student_data
-        )
+        print("FACE RECOGNIZED:", student_data)
 
-        return (
-            student_data,
-            confidence,
-            None
-        )
+        return student_data, confidence, None
 
     except Exception as e:
-
-        print(
-            "FACE RECOGNITION ERROR:",
-            e
-        )
-
-        return (
-            None,
-            None,
-            str(e)
-        )
+        print("FACE RECOGNITION ERROR:", e)
+        return None, None, str(e)
 
 
 # =========================================================
@@ -2440,13 +2090,9 @@ def recognize_face(frame):
 
 @app.route("/face_recognition")
 def face_recognition():
-
     if not require_attendance_role():
         return "Access Denied", 403
-
-    return render_template(
-        "face_recognition.html"
-    )
+    return render_template("face_recognition.html")
 
 
 # =========================================================
@@ -2456,69 +2102,38 @@ def face_recognition():
 def _time_to_minutes(hour, minute, ampm=None):
     """
     Convert time to minutes since midnight.
-
-    Supports 09:00, 09:00 AM, 01:30 PM, 13:30.
-    For timetable values without AM/PM:
-        1-7 = afternoon/evening, 8-12 = morning, 13+ = 24-hour format
+    Without AM/PM: 1-7 = afternoon, 8-12 = morning, 13+ = 24-hour.
     """
-
     hour = int(hour)
     minute = int(minute)
-
-    ampm = (
-        str(ampm or "")
-        .strip()
-        .lower()
-    )
+    ampm = str(ampm or "").strip().lower()
 
     if ampm:
-
         if ampm == "pm":
-
             if hour != 12:
                 hour += 12
-
         elif ampm == "am":
-
             if hour == 12:
                 hour = 0
-
     else:
-
-        # 24-hour format
         if hour >= 13:
             pass
-
-        # midnight
         elif hour == 0:
             hour = 0
-
-        # College timetable: 1-7 means afternoon
         elif 1 <= hour <= 7:
             hour += 12
-
-        # 8-12 means morning
         else:
             pass
 
-    return (
-        hour * 60
-        + minute
-    )
+    return hour * 60 + minute
 
 
 def _parse_timetable_range(value):
     """
-    Parse timetable period.
-
-    Supported:
-        09:00 AM - 10:00 AM, 9:00 AM-10:00 AM, 01:30 PM - 02:20 PM,
-        09:00-09:50, 1:30-2:20, 13:30-14:20, 01:30-02:20 PM
+    Parse timetable period such as:
+    09:00 AM - 10:00 AM, 9:00-9:50, 1:30-2:20, 13:30-14:20, 01:30-02:20 PM
     """
-
-    text = str(
-        value or ""
-    ).strip()
+    text = str(value or "").strip()
 
     if not text:
         return None
@@ -2532,8 +2147,7 @@ def _parse_timetable_range(value):
         \s*(AM|PM)?
         """,
         text,
-        re.IGNORECASE |
-        re.VERBOSE
+        re.IGNORECASE | re.VERBOSE
     )
 
     if not match:
@@ -2547,137 +2161,68 @@ def _parse_timetable_range(value):
     em = int(match.group(5))
     eap = match.group(6)
 
-    # IF ONLY END HAS AM/PM
+    # Only the end has AM/PM, e.g. "01:30 - 02:20 PM"
     if not sap and eap:
-
-        eap_upper = eap.upper()
-
-        if eap_upper == "PM":
-
-            # 01:30 - 02:20 PM -> start should also be PM.
-            if sh <= 7:
-                sap = "PM"
-            else:
-                sap = "AM"
-
+        if eap.upper() == "PM":
+            sap = "PM" if sh <= 7 else "AM"
         else:
             sap = "AM"
 
-    # CONVERT
-    start_minutes = _time_to_minutes(
-        sh,
-        sm,
-        sap
-    )
+    start_minutes = _time_to_minutes(sh, sm, sap)
+    end_minutes = _time_to_minutes(eh, em, eap)
 
-    end_minutes = _time_to_minutes(
-        eh,
-        em,
-        eap
-    )
+    # College time without AM/PM, e.g. "1:30-2:20"
+    if end_minutes <= start_minutes and not eap and 1 <= eh <= 7:
+        possible_end = (eh + 12) * 60 + em
+        if possible_end > start_minutes:
+            end_minutes = possible_end
 
-    # HANDLE COLLEGE TIME WITHOUT AM/PM (e.g. 1:30-2:20)
-    if end_minutes <= start_minutes:
-
-        if not eap:
-
-            if 1 <= eh <= 7:
-
-                possible_end = (
-                    (eh + 12) * 60
-                    + em
-                )
-
-                if possible_end > start_minutes:
-                    end_minutes = possible_end
-
-    # INVALID RANGE
     if end_minutes <= start_minutes:
         return None
 
-    return (
-        start_minutes,
-        end_minutes
-    )
+    return start_minutes, end_minutes
 
 
-def _find_current_timetable_period(
-    db,
-    student_year,
-    department,
-    day_name,
-    current_minutes
-):
-    """
-    Find the timetable period currently active
-    for this student's year + department.
-    """
+def _find_current_timetable_period(db, student_year, department, day_name, current_minutes):
+    """Find the timetable period currently active for this year + department."""
 
     rows = db.execute(
         """
         SELECT *
         FROM timetable
-        WHERE
-            LOWER(TRIM(department))
-            =
-            LOWER(TRIM(?))
-        AND
-            LOWER(TRIM(day))
-            =
-            LOWER(TRIM(?))
+        WHERE LOWER(TRIM(department)) = LOWER(TRIM(?))
+          AND LOWER(TRIM(day)) = LOWER(TRIM(?))
         ORDER BY id ASC
         """,
-        (
-            str(department),
-            str(day_name)
-        )
+        (str(department), str(day_name))
     ).fetchall()
 
-    wanted_year = normalize_year(
-        student_year
-    )
+    wanted_year = normalize_year(student_year)
 
     for row in rows:
-
-        row_year = ""
 
         try:
             row_year = row["year"]
         except Exception:
-            pass
+            row_year = ""
 
-        # YEAR CHECK
         if normalize_year(row_year) != wanted_year:
             continue
 
-        # TIME CHECK
         try:
             time_value = row["time"]
         except Exception:
             time_value = ""
 
-        parsed = _parse_timetable_range(
-            time_value
-        )
+        parsed = _parse_timetable_range(time_value)
 
         if not parsed:
             continue
 
         start_minutes, end_minutes = parsed
 
-        # CURRENT PERIOD
-        if (
-            start_minutes
-            <= current_minutes
-            <
-            end_minutes
-        ):
-
-            print(
-                "ACTIVE TIMETABLE:",
-                dict(row)
-            )
-
+        if start_minutes <= current_minutes < end_minutes:
+            print("ACTIVE TIMETABLE:", dict(row))
             return row
 
     return None
@@ -2687,15 +2232,10 @@ def _find_current_timetable_period(
 # FACE RECOGNITION + AUTOMATIC ATTENDANCE
 # =========================================================
 
-@app.route(
-    "/api/recognize_face",
-    methods=["POST"]
-)
+@app.route("/api/recognize_face", methods=["POST"])
 def api_recognize_face():
 
-    # ROLE CHECK
     if not kiosk_or_staff():
-
         return jsonify({
             "success": False,
             "recognized": False,
@@ -2705,83 +2245,44 @@ def api_recognize_face():
     db = None
 
     try:
-
-        # GET JSON
-        data = request.get_json(
-            silent=True
-        ) or {}
-
-        image_data = data.get(
-            "image",
-            ""
-        )
+        data = request.get_json(silent=True) or {}
+        image_data = data.get("image", "")
 
         if not image_data:
-
             return jsonify({
                 "success": False,
                 "recognized": False,
                 "message": "Image is required."
             }), 400
 
-        # REMOVE BASE64 HEADER
         if "," in image_data:
+            image_data = image_data.split(",", 1)[1]
 
-            image_data = image_data.split(
-                ",",
-                1
-            )[1]
-
-        # DECODE IMAGE
         try:
-
-            image_bytes = base64.b64decode(
-                image_data,
-                validate=True
-            )
-
+            image_bytes = base64.b64decode(image_data, validate=True)
         except Exception:
-
             return jsonify({
                 "success": False,
                 "recognized": False,
                 "message": "Invalid image data."
             }), 400
 
-        image_array = np.frombuffer(
-            image_bytes,
-            dtype=np.uint8
-        )
-
-        frame = cv2.imdecode(
-            image_array,
-            cv2.IMREAD_COLOR
-        )
+        image_array = np.frombuffer(image_bytes, dtype=np.uint8)
+        frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
 
         if frame is None:
-
             return jsonify({
                 "success": False,
                 "recognized": False,
                 "message": "Invalid image."
             }), 400
 
-        # RECOGNIZE FACE
-        # recognize_face() returns (student, confidence, error), NOT a dict.
-        student, confidence, error = recognize_face(
-            frame
-        )
+        # recognize_face() returns (student, confidence, error) - not a dict.
+        student, confidence, error = recognize_face(frame)
 
-        print(
-            "RECOGNITION RESULT:",
-            student,
-            confidence,
-            error
-        )
+        print("RECOGNITION RESULT:", student, confidence, error)
 
-        # RECOGNITION ERROR
         if error:
-
             return jsonify({
                 "success": False,
                 "recognized": False,
@@ -2789,9 +2290,7 @@ def api_recognize_face():
                 "confidence": confidence
             }), 200
 
-        # NO STUDENT
         if not student:
-
             return jsonify({
                 "success": False,
                 "recognized": False,
@@ -2799,67 +2298,26 @@ def api_recognize_face():
                 "confidence": confidence
             }), 200
 
-        # STUDENT DETAILS
-        student_id = str(
-            student["student_id"]
-        )
+        student_id = str(student["student_id"])
+        student_name = str(student.get("name", ""))
+        student_year = str(student.get("year", ""))
+        student_department = str(student.get("department", ""))
 
-        student_name = str(
-            student.get(
-                "name",
-                ""
-            )
-        )
+        now = now_local()
+        today = now.strftime("%Y-%m-%d")
+        current_time = now.strftime("%H:%M:%S")
+        day_name = now.strftime("%A")
+        current_minutes = now.hour * 60 + now.minute
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        student_year = str(
-            student.get(
-                "year",
-                ""
-            )
-        )
-
-        student_department = str(
-            student.get(
-                "department",
-                ""
-            )
-        )
-
-        # CURRENT DATE / TIME
-        now = datetime.now()
-
-        today = now.strftime(
-            "%Y-%m-%d"
-        )
-
-        current_time = now.strftime(
-            "%H:%M:%S"
-        )
-
-        day_name = now.strftime(
-            "%A"
-        )
-
-        current_minutes = (
-            now.hour * 60
-            + now.minute
-        )
-
-        # DEFAULT ATTENDANCE RESPONSE
         attendance_marked = False
-
         attendance_status = None
-
         attendance_message = ""
-
         attendance_subject = None
-
         attendance_time = None
 
-        # DATABASE
         db = get_db_connection()
 
-        # CREATE ATTENDANCE TABLE IF REQUIRED
         db.execute(
             """
             CREATE TABLE IF NOT EXISTS attendance (
@@ -2873,213 +2331,106 @@ def api_recognize_face():
             )
             """
         )
-
         db.commit()
 
-        # FIND CURRENT TIMETABLE PERIOD
-        current_period = (
-            _find_current_timetable_period(
-                db,
-                student_year,
-                student_department,
-                day_name,
-                current_minutes
-            )
+        current_period = _find_current_timetable_period(
+            db, student_year, student_department, day_name, current_minutes
         )
 
-        # NO ACTIVE PERIOD
         if current_period is None:
-
             attendance_message = (
-                "Face recognized, but no active "
-                "timetable period found."
+                "Face recognized, but no active timetable period found."
             )
 
-        # ACTIVE PERIOD FOUND
         else:
+            attendance_subject = str(current_period["subject"]).strip()
+            attendance_time = str(current_period["time"]).strip()
 
-            attendance_subject = str(
-                current_period["subject"]
-            ).strip()
-
-            attendance_time = str(
-                current_period["time"]
-            ).strip()
-
-            # CHECK EXISTING ATTENDANCE
             existing = db.execute(
                 """
-                SELECT
-                    id,
-                    status
+                SELECT id, status
                 FROM attendance
-                WHERE
-                    student_id = ?
-                AND
-                    date = ?
-                AND
-                    time = ?
-                AND
-                    subject = ?
+                WHERE student_id = ?
+                  AND date = ?
+                  AND time = ?
+                  AND subject = ?
                 LIMIT 1
                 """,
-                (
-                    student_id,
-                    today,
-                    attendance_time,
-                    attendance_subject
-                )
+                (student_id, today, attendance_time, attendance_subject)
             ).fetchone()
 
-            # ALREADY EXISTS
             if existing:
+                existing_status = str(existing["status"] or "").strip().lower()
 
-                existing_status = str(
-                    existing["status"] or ""
-                ).strip().lower()
-
-                # ALREADY PRESENT
                 if existing_status == "present":
-
                     attendance_marked = True
-
                     attendance_status = "Present"
-
                     attendance_message = (
-                        f"Already marked Present "
-                        f"for {attendance_subject}."
+                        f"Already marked Present for {attendance_subject}."
                     )
-
-                # EXISTING ABSENT -> PRESENT
                 else:
-
                     db.execute(
                         """
                         UPDATE attendance
-                        SET
-                            status = ?,
-                            marked_at = ?
+                        SET status = ?, marked_at = ?
                         WHERE id = ?
                         """,
-                        (
-                            "Present",
-                            now.strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            ),
-                            existing["id"]
-                        )
+                        ("Present", now_str, existing["id"])
                     )
-
                     db.commit()
 
                     attendance_marked = True
-
                     attendance_status = "Present"
-
                     attendance_message = (
-                        f"Attendance updated to "
-                        f"Present for {attendance_subject}."
+                        f"Attendance updated to Present for {attendance_subject}."
                     )
 
-            # NO EXISTING RECORD -> INSERT PRESENT
             else:
-
                 db.execute(
                     """
                     INSERT INTO attendance
-                    (
-                        student_id,
-                        date,
-                        time,
-                        subject,
-                        status,
-                        marked_at
-                    )
+                    (student_id, date, time, subject, status, marked_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (
-                        student_id,
-                        today,
-                        attendance_time,
-                        attendance_subject,
-                        "Present",
-                        now.strftime(
-                            "%Y-%m-%d %H:%M:%S"
-                        )
-                    )
+                    (student_id, today, attendance_time,
+                     attendance_subject, "Present", now_str)
                 )
-
                 db.commit()
 
                 attendance_marked = True
-
                 attendance_status = "Present"
-
                 attendance_message = (
-                    f"Attendance marked Present "
-                    f"for {attendance_subject}."
+                    f"Attendance marked Present for {attendance_subject}."
                 )
 
-        # FINAL RESPONSE
         return jsonify({
-
             "success": True,
-
             "recognized": True,
-
-            # Full student object
             "student": student,
-
-            # Direct student fields
             "student_id": student_id,
-
             "name": student_name,
-
             "year": student_year,
-
             "department": student_department,
-
-            # Face confidence
             "confidence": (
-                round(
-                    float(confidence),
-                    2
-                )
-                if confidence is not None
-                else None
+                round(float(confidence), 2) if confidence is not None else None
             ),
-
-            # Attendance
             "attendance_marked": attendance_marked,
-
             "attendance_status": attendance_status,
-
             "attendance_message": attendance_message,
-
             "attendance_subject": attendance_subject,
-
             "attendance_time": attendance_time,
-
-            # Current date/time
             "current_time": current_time,
-
             "date": today
         })
 
-    # ERROR
     except Exception as e:
-
         if db is not None:
-
             try:
                 db.rollback()
             except Exception:
                 pass
 
-        print(
-            "FACE RECOGNITION / ATTENDANCE ERROR:",
-            e
-        )
+        print("FACE RECOGNITION / ATTENDANCE ERROR:", e)
 
         return jsonify({
             "success": False,
@@ -3087,11 +2438,8 @@ def api_recognize_face():
             "message": str(e)
         }), 500
 
-    # CLOSE DB
     finally:
-
         if db is not None:
-
             try:
                 db.close()
             except Exception:
@@ -3257,20 +2605,17 @@ def attendance_report_page():
 
 @app.route("/api/admin_attendance_report")
 def api_admin_attendance_report():
-    """Month-end attendance report for a department + year.
+    """Per-student attendance totals for a department + year.
 
-    Total hours  = every timetable period that falls inside the month
-                   (periods per weekday x number of those weekdays in the month)
-    Absent hours = periods the student was marked Absent in that month
-    Attended     = Total hours - Absent hours
-    Percentage   = Attended / Total hours * 100   (calculated on the page)
+    One marked period = one hour (same rule as the student summary API).
     """
-    if session.get("role") != "admin":
+    if not require_attendance_role():
         return jsonify({"success": False, "message": "Access Denied"}), 403
 
     year = normalize_year(request.args.get("year", "")).upper()
     department = request.args.get("department", "").strip()
-    month_value = request.args.get("month", "").strip() or datetime.now().strftime("%Y-%m")
+    month = request.args.get("month", "").strip()          # YYYY-MM (optional)
+    month_like = (month + "%") if month else "%"
 
     year_aliases = {
         "I": ["i", "1st", "1st year", "1"],
@@ -3284,26 +2629,6 @@ def api_admin_attendance_report():
             "success": False,
             "message": "Department and year are required."
         }), 400
-
-    try:
-        month_dt = datetime.strptime(month_value, "%Y-%m")
-    except ValueError:
-        return jsonify({
-            "success": False,
-            "message": "Invalid month. Use YYYY-MM."
-        }), 400
-
-    y, m = month_dt.year, month_dt.month
-    ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
-    month_start = f"{y:04d}-{m:02d}-01"
-    next_month_start = f"{ny:04d}-{nm:02d}-01"
-
-    # How many Mondays, Tuesdays ... are there in this month?
-    day_names = ["monday", "tuesday", "wednesday", "thursday",
-                 "friday", "saturday", "sunday"]
-    weekday_counts = [0] * 7
-    for d in range(1, calendar.monthrange(y, m)[1] + 1):
-        weekday_counts[datetime(y, m, d).weekday()] += 1
 
     possible_years = year_aliases.get(year, [year.lower()])
 
@@ -3324,65 +2649,27 @@ def api_admin_attendance_report():
             )
         """)
 
-        # ---- total hours in the month (same for the whole class) ----
-        timetable_rows = db.execute("""
-            SELECT year, day, time, subject
-            FROM timetable
-            WHERE LOWER(TRIM(department)) = LOWER(TRIM(?))
-        """, (department,)).fetchall()
-
-        seen = set()
-        total_hours = 0
-        for r in timetable_rows:
-            if normalize_year(r["year"]).upper() != year:
-                continue
-            day = str(r["day"] or "").strip().lower()
-            if day not in day_names:
-                continue
-            key = (day,
-                   str(r["time"] or "").strip().lower(),
-                   str(r["subject"] or "").strip().lower())
-            if key in seen:          # same period uploaded twice
-                continue
-            seen.add(key)
-            total_hours += weekday_counts[day_names.index(day)]
-
-        # ---- absent hours per student in the month ----
         placeholders = ",".join(["?"] * len(possible_years))
 
         rows = db.execute(f"""
             SELECT
                 s.student_id,
                 s.name,
-                COALESCE(SUM(CASE WHEN LOWER(TRIM(a.status)) = 'absent'
-                                  THEN 1 ELSE 0 END), 0) AS absent_hours
+                COALESCE(SUM(CASE WHEN LOWER(TRIM(a.status)) IN ('present', 'absent')
+                                  THEN 1 ELSE 0 END), 0) AS total_hours,
+                COALESCE(SUM(CASE WHEN LOWER(TRIM(a.status)) = 'present'
+                                  THEN 1 ELSE 0 END), 0) AS present_hours
             FROM students s
-            LEFT JOIN attendance a
-                   ON a.student_id = s.student_id
-                  AND a.date >= ?
-                  AND a.date < ?
+            LEFT JOIN attendance a ON a.student_id = s.student_id AND a.date LIKE ?
             WHERE LOWER(TRIM(s.year)) IN ({placeholders})
               AND LOWER(TRIM(s.department)) = LOWER(TRIM(?))
             GROUP BY s.student_id, s.name
             ORDER BY s.student_id
-        """, [month_start, next_month_start] + possible_years + [department]).fetchall()
-
-        students = []
-        for r in rows:
-            absent = int(r["absent_hours"] or 0)
-            students.append({
-                "student_id": r["student_id"],
-                "name": r["name"],
-                "total_hours": total_hours,
-                "absent_hours": absent,
-                "present_hours": max(total_hours - absent, 0),
-            })
+        """, [month_like] + possible_years + [department]).fetchall()
 
         return jsonify({
             "success": True,
-            "month": f"{y:04d}-{m:02d}",
-            "month_total_hours": total_hours,
-            "students": students
+            "students": [dict(r) for r in rows]
         })
 
     except Exception as e:
@@ -3459,12 +2746,402 @@ def api_change_password():
 
 
 # =========================================================
+# FACULTY / REPRESENTATIVE PAGES
+# =========================================================
+
+def _staff_page(page):
+    if not require_attendance_role():
+        return redirect(url_for("login"))
+    return render_template(
+        "staff.html",
+        page=page,
+        username=session.get("username", ""),
+        role=session.get("role", "")
+    )
+
+
+@app.route("/staff")
+def staff_home():
+    return _staff_page("home")
+
+
+@app.route("/staff/manual")
+def staff_manual():
+    return _staff_page("manual")
+
+
+@app.route("/staff/hourly")
+def staff_hourly():
+    return _staff_page("hourly")
+
+
+@app.route("/staff/report")
+def staff_report():
+    return _staff_page("report")
+
+
+def _year_variants(year):
+    aliases = {
+        "I": ["i", "1st", "1st year", "1"],
+        "II": ["ii", "2nd", "2nd year", "2"],
+        "III": ["iii", "3rd", "3rd year", "3"],
+        "IV": ["iv", "4th", "4th year", "4"],
+    }
+    y = normalize_year(year).upper()
+    return aliases.get(y, [y.lower()])
+
+
+@app.route("/api/departments")
+def api_departments():
+    if not require_attendance_role():
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+
+    db = get_db_connection()
+    try:
+        rows = db.execute("""
+            SELECT DISTINCT TRIM(department) AS department
+            FROM students
+            WHERE department IS NOT NULL AND TRIM(department) <> ''
+            ORDER BY department COLLATE NOCASE
+        """).fetchall()
+        return jsonify({"success": True,
+                        "departments": [r["department"] for r in rows]})
+    except Exception as e:
+        print("DEPARTMENTS ERROR:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/period_attendance")
+def api_period_attendance():
+    """Every period of a day with the full student list and each status."""
+    if not require_attendance_role():
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+
+    date_value = request.args.get("date", "").strip()
+    year = normalize_year(request.args.get("year", ""))
+    department = request.args.get("department", "").strip()
+
+    if not date_value or not year or not department:
+        return jsonify({
+            "success": False,
+            "message": "Date, year and department are required."
+        }), 400
+
+    try:
+        day_name = datetime.strptime(date_value, "%Y-%m-%d").strftime("%A")
+    except ValueError:
+        return jsonify({"success": False, "message": "Invalid date."}), 400
+
+    db = None
+    try:
+        db = get_db_connection()
+
+        variants = _year_variants(year)
+        placeholders = ",".join(["?"] * len(variants))
+
+        students = db.execute(f"""
+            SELECT student_id, name
+            FROM students
+            WHERE LOWER(TRIM(year)) IN ({placeholders})
+              AND LOWER(TRIM(department)) = LOWER(TRIM(?))
+            ORDER BY student_id
+        """, variants + [department]).fetchall()
+
+        slots = db.execute("""
+            SELECT time, subject, faculty
+            FROM timetable
+            WHERE UPPER(TRIM(year)) = UPPER(TRIM(?))
+              AND LOWER(TRIM(department)) = LOWER(TRIM(?))
+              AND LOWER(TRIM(day)) = LOWER(TRIM(?))
+        """, (year, department, day_name)).fetchall()
+
+        status_map = {}
+        try:
+            marked = db.execute("""
+                SELECT student_id, time, subject, status
+                FROM attendance
+                WHERE date = ?
+            """, (date_value,)).fetchall()
+            for a in marked:
+                key = (str(a["student_id"]),
+                       str(a["time"]).strip().lower(),
+                       str(a["subject"]).strip().lower())
+                status_map[key] = str(a["status"]).strip().capitalize()
+        except OperationalError:
+            pass  # attendance table not created yet
+
+        now = now_local()
+        today = now.strftime("%Y-%m-%d")
+        now_minutes = now.hour * 60 + now.minute
+
+        periods = []
+        seen = set()
+
+        for slot in sorted(slots, key=lambda r: period_start_minutes(r["time"])):
+            time_text = str(slot["time"] or "").strip()
+            subject = str(slot["subject"] or "").strip()
+
+            if (time_text.lower(), subject.lower()) in seen:
+                continue
+            seen.add((time_text.lower(), subject.lower()))
+
+            parsed = _parse_timetable_range(time_text)
+
+            if date_value < today:
+                state = "ended"
+            elif date_value > today:
+                state = "upcoming"
+            elif not parsed:
+                state = "unknown"
+            elif now_minutes >= parsed[1]:
+                state = "ended"
+            elif now_minutes >= parsed[0]:
+                state = "ongoing"
+            else:
+                state = "upcoming"
+
+            rows = []
+            present = absent = 0
+            for st in students:
+                sid = str(st["student_id"])
+                status = status_map.get(
+                    (sid, time_text.lower(), subject.lower()), "Not marked"
+                )
+                if status == "Present":
+                    present += 1
+                elif status == "Absent":
+                    absent += 1
+                rows.append({"roll_no": sid, "name": st["name"], "status": status})
+
+            periods.append({
+                "time": time_text,
+                "subject": subject,
+                "faculty": slot["faculty"],
+                "state": state,
+                "present": present,
+                "absent": absent,
+                "not_marked": len(rows) - present - absent,
+                "students": rows
+            })
+
+        return jsonify({
+            "success": True,
+            "day": day_name,
+            "total_students": len(students),
+            "periods": periods
+        })
+
+    except Exception as e:
+        print("PERIOD ATTENDANCE ERROR:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+    finally:
+        if db is not None:
+            db.close()
+
+
+
+# =========================================================
+# FACULTY PROFILE (name, department, year from Faculty.csv)
+# =========================================================
+
+FACULTY_CSV = os.path.join(BASE_DIR, "Faculty.csv")
+
+
+def _csv_faculty():
+    import csv
+    data = {}
+    try:
+        with open(FACULTY_CSV, newline="", encoding="utf-8-sig") as f:
+            for r in csv.DictReader(f):
+                name = (r.get("name") or "").strip()
+                if name:
+                    data[name.lower()] = {
+                        "name": name,
+                        "department": (r.get("department") or "").strip(),
+                        "year": normalize_year(r.get("year")),
+                    }
+    except FileNotFoundError:
+        print("Faculty.csv not found")
+    return data
+
+
+def load_faculty():
+    """Faculty from the database (falls back to Faculty.csv)."""
+    data = {}
+    try:
+        db = get_db_connection()
+        try:
+            for r in db.execute("SELECT name, department, year FROM faculty").fetchall():
+                data[str(r["name"]).strip().lower()] = {
+                    "name": str(r["name"]).strip(),
+                    "department": str(r["department"] or "").strip(),
+                    "year": normalize_year(r["year"]),
+                }
+        finally:
+            db.close()
+    except Exception as e:
+        print("FACULTY LOAD ERROR:", e)
+    return data or _csv_faculty()
+
+
+@app.route("/api/faculty_profile")
+def api_faculty_profile():
+    if not require_attendance_role():
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+    username = session.get("username", "")
+    info = load_faculty().get(username.lower(), {})
+    return jsonify({
+        "success": True,
+        "username": username,
+        "role": session.get("role", ""),
+        "name": info.get("name", username),
+        "department": info.get("department", ""),
+        "year": info.get("year", ""),
+    })
+
+
+# =========================================================
+# ADD FACULTY (admin: upload CSV / Excel)
+# =========================================================
+
+@app.route("/add_faculty")
+def add_faculty_page():
+    if session.get("role") != "admin":
+        return "Access Denied"
+    return render_template("add_faculty.html")
+
+
+@app.route("/api/faculty_list")
+def api_faculty_list():
+    if session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+    db = get_db_connection()
+    try:
+        rows = db.execute(
+            "SELECT name, department, year FROM faculty ORDER BY year, department, name"
+        ).fetchall()
+        return jsonify({"success": True, "faculty": [
+            {"name": r["name"], "department": r["department"], "year": r["year"]}
+            for r in rows]})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/api/faculty_set_password", methods=["POST"])
+def api_faculty_set_password():
+    """Set one password for every faculty login."""
+    if session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+    pw = str((request.get_json(silent=True) or {}).get("password", "")).strip()
+    if len(pw) < 6:
+        return jsonify({"success": False,
+                        "message": "Password must contain at least 6 characters."}), 400
+    db = get_db_connection()
+    try:
+        n = db.execute("SELECT COUNT(*) AS c FROM users WHERE role = 'faculty'").fetchone()["c"]
+        db.execute("UPDATE users SET password = ? WHERE role = 'faculty'", (pw,))
+        db.commit()
+        return jsonify({"success": True, "count": n,
+                        "message": f"Password updated for {n} faculty login(s)."})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route("/upload_faculty_csv", methods=["POST"])
+def upload_faculty_csv():
+    """Rows come from the browser (CSV or Excel parsed there).
+    Columns: name, department, year [, password]."""
+    if session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Access Denied"}), 403
+
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if len(rows) < 2:
+        return jsonify({"success": False,
+                        "message": "The file must contain a header row and faculty data."}), 400
+
+    headers = [str(h).strip().lower().replace(" ", "_") for h in rows[0]]
+    for need in ("name", "department", "year"):
+        if need not in headers:
+            return jsonify({"success": False,
+                            "message": "Missing column. Use: name, department, year (password optional)."}), 400
+    idx = {h: headers.index(h) for h in ("name", "department", "year", "password") if h in headers}
+
+    default_pw = str(data.get("default_password") or "").strip() \
+        or os.environ.get("FACULTY_DEFAULT_PASSWORD", "faculty123")
+    if len(default_pw) < 6:
+        return jsonify({"success": False,
+                        "message": "Default password must contain at least 6 characters."}), 400
+    reset_existing = bool(data.get("reset_existing"))
+    added = updated = skipped = 0
+    errors = []
+    db = get_db_connection()
+    try:
+        for n, row in enumerate(rows[1:], start=2):
+            if not row or not any(str(c).strip() for c in row):
+                continue
+
+            def cell(k):
+                i = idx.get(k)
+                return str(row[i]).strip() if i is not None and i < len(row) and row[i] is not None else ""
+
+            name, dept = cell("name"), cell("department")
+            year = normalize_year(cell("year")).upper()
+            password = cell("password") or default_pw
+
+            if not (name and dept and year):
+                skipped += 1
+                errors.append(f"Row {n}: name, department and year are required")
+                continue
+            if year not in ("I", "II", "III", "IV"):
+                skipped += 1
+                errors.append(f"Row {n}: year must be I, II, III or IV")
+                continue
+
+            exists = db.execute(
+                "SELECT id FROM faculty WHERE LOWER(name) = LOWER(?)", (name,)
+            ).fetchone()
+            if exists:
+                db.execute("UPDATE faculty SET department = ?, year = ? WHERE id = ?",
+                           (dept, year, exists["id"]))
+                updated += 1
+            else:
+                db.execute("INSERT INTO faculty (name, department, year) VALUES (?, ?, ?)",
+                           (name, dept, year))
+                added += 1
+
+            user = db.execute("SELECT id, role FROM users WHERE LOWER(username) = LOWER(?)",
+                              (name,)).fetchone()
+            if not user:
+                db.execute("INSERT INTO users (username, password, role) VALUES (?, ?, 'faculty')",
+                           (name, password))
+            elif reset_existing and user["role"] == "faculty":
+                db.execute("UPDATE users SET password = ? WHERE id = ?", (password, user["id"]))
+
+        db.commit()
+        return jsonify({"success": True, "added": added, "updated": updated,
+                        "skipped": skipped, "errors": errors[:50],
+                        "message": f"{added} faculty added, {updated} updated."})
+    except Exception as e:
+        print("UPLOAD FACULTY ERROR:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        db.close()
+
+
+# =========================================================
 # TEST
 # =========================================================
 
 @app.route("/test")
 def test():
-
     return "FLASK IS WORKING"
 
 
@@ -3495,6 +3172,12 @@ def init_db():
                 phone TEXT,
                 gender TEXT
             );
+            CREATE TABLE IF NOT EXISTS faculty (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                department TEXT NOT NULL,
+                year TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS timetable (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 year TEXT,
@@ -3513,13 +3196,6 @@ def init_db():
                 status TEXT NOT NULL,
                 marked_at TEXT
             );
-            CREATE TABLE IF NOT EXISTS face_samples (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id TEXT NOT NULL,
-                number INTEGER NOT NULL,
-                image TEXT NOT NULL,
-                UNIQUE (student_id, number)
-            );
         """)
 
         has_admin = db.execute(
@@ -3536,6 +3212,19 @@ def init_db():
             )
             print("DEFAULT ADMIN CREATED:", admin_user)
 
+        fac_pass = os.environ.get("FACULTY_DEFAULT_PASSWORD", "faculty123")
+        for f in _csv_faculty().values():
+            if not db.execute("SELECT 1 FROM faculty WHERE LOWER(name) = LOWER(?)",
+                              (f["name"],)).fetchone():
+                db.execute("INSERT INTO faculty (name, department, year) VALUES (?, ?, ?)",
+                           (f["name"], f["department"], f["year"]))
+        for r in db.execute("SELECT name FROM faculty").fetchall():
+            db.execute(
+                "INSERT OR IGNORE INTO users (username, password, role) "
+                "VALUES (?, ?, 'faculty')",
+                (r["name"], fac_pass)
+            )
+
         db.commit()
     finally:
         db.close()
@@ -3548,11 +3237,6 @@ try:
 except Exception as e:
     print("DATABASE INIT ERROR:", e)
 
-try:
-    restore_faces_from_db()
-except Exception as e:
-    print("FACE RESTORE ERROR:", e)
-
 
 # =========================================================
 # RUN APPLICATION
@@ -3560,20 +3244,9 @@ except Exception as e:
 
 if __name__ == "__main__":
 
-    try:
-
-        ensure_student_contact_columns()
-
-    except Exception as e:
-
-        print(
-            "STARTUP DATABASE CHECK ERROR:",
-            e
-        )
-
     print("========================================")
     print("SMART ATTENDANCE SERVER STARTING")
-    print("DATABASE:", os.environ.get("DATABASE_URL") and "PostgreSQL (DATABASE_URL)" or DATABASE)
+    print("DATABASE:", TURSO_URL if USE_TURSO else DATABASE)
     print("TRAINER:", TRAINER_PATH)
     print("FACE LABELS:", FACE_LABELS_PATH)
     print("========================================")

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty - Smart Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0a1f44;--navy3:#1d3f85;--blue:#1d6cf2;--green:#15803d;--gbg:#e8f6ee;--red:#dc2626;--rbg:#fff1f2;--ink:#0f1b33;--muted:#64748b;--line:#e2e8f0;--bg:#f4f7fb;--amber:#b45309;--abg:#fff7e6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Manrope',system-ui,Arial,sans-serif;background:var(--bg);color:var(--ink);display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+button,input,select{font:inherit}
+aside{background:var(--navy);color:#fff;padding:24px 16px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:12px;align-items:center;font-weight:800;font-size:17px;padding:0 8px 22px}
+.logo{width:38px;height:38px;border-radius:11px;background:#fff;color:var(--navy);display:grid;place-items:center;font-size:14px}
+aside a{display:block;color:#c9d6f2;text-decoration:none;padding:12px 14px;border-radius:11px;font-weight:600;font-size:14.5px;transition:background .2s}
+aside a:hover{background:rgba(255,255,255,.09)}
+aside a.on{background:var(--blue);color:#fff}
+aside a.out{margin-top:auto;border:1px solid rgba(255,255,255,.3);text-align:center}
+main{padding:26px 30px 60px;min-width:0}
+.head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.who h1{font-size:25px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
+.who p{color:var(--muted);font-size:14px;margin-top:4px}
+.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 14px;font-size:13px;color:var(--muted)}
+.chip b{display:block;color:var(--navy);font-size:15px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:20px}
+.panel h2{font-size:17px;font-weight:800;color:var(--navy);margin-bottom:14px}
+.bar{display:flex;gap:14px;flex-wrap:wrap;align-items:end;margin-bottom:18px}
+.bar label{display:block;font-size:12.5px;font-weight:700;color:#41536f;margin-bottom:6px}
+input,select{height:42px;border:1.5px solid var(--line);border-radius:10px;padding:0 12px;background:#fbfdff;color:var(--ink)}
+input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,108,242,.15)}
+.btn{height:42px;padding:0 18px;border:0;border-radius:10px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer}
+.btn:hover{background:#0f56d0}.btn.alt{background:#fff;color:var(--blue);border:1.5px solid var(--blue)}
+.btn:focus-visible{outline:3px solid rgba(29,108,242,.4);outline-offset:2px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px}
+.stat span{font-size:13px;color:var(--muted);font-weight:600}.stat b{display:block;font-size:30px;color:var(--navy);margin-top:4px}
+.stat.big{background:var(--navy);border-color:var(--navy)}.stat.big span{color:#a9b8d8}.stat.big b{color:#fff}
+.hours{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.hour{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fbfdff}
+.hour .t{font-weight:800;font-size:14px;color:var(--navy)}.hour .s{font-size:12.5px;color:var(--muted);margin:2px 0 10px;min-height:17px}
+.hour .n{display:flex;gap:8px;font-size:13px;font-weight:700}
+.pill{padding:3px 9px;border-radius:99px;font-size:12px;font-weight:700}
+.p{background:var(--gbg);color:var(--green)}.a{background:var(--rbg);color:var(--red)}.m{background:#eef2f7;color:var(--muted)}.o{background:var(--abg);color:var(--amber)}
+.hour .st{float:right;font-size:11.5px}
+.wrapx{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{background:#f3f7fd;color:#41536f;font-size:12.5px;position:sticky;top:0}
+td.c,th.c{text-align:center}
+tr:last-child td{border-bottom:0}
+.dot{display:inline-block;min-width:26px;padding:3px 0;border-radius:7px;font-weight:800;font-size:12.5px;text-align:center}
+.tg{display:inline-flex;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.tg button{border:0;background:#fff;padding:7px 14px;font-weight:700;cursor:pointer;color:var(--muted)}
+.tg button.p.sel{background:var(--green);color:#fff}.tg button.a.sel{background:var(--red);color:#fff}
+.note{color:var(--muted);font-size:14px;padding:18px 4px}
+.msg{margin-top:12px;font-weight:700;font-size:14px}.msg.ok{color:var(--green)}.msg.bad{color:var(--red)}
+.ck{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;height:42px}.ck input{height:auto;width:18px;height:18px}
+@media(max-width:860px){body{grid-template-columns:1fr}aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;padding:14px}.brand{width:100%;padding-bottom:8px}aside a.out{margin-top:0}main{padding:20px 16px 50px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><div class="logo">SA</div>Faculty Portal</div>
+  <a href="/staff" class="{{ 'on' if page in ('home','hourly') }}">Class Attendance</a>
+  <a href="/staff/manual" class="{{ 'on' if page=='manual' }}">Manual Attendance</a>
+  <a href="/staff/report" class="{{ 'on' if page=='report' }}">Attendance Report</a>
+  <a href="/logout" class="out">Logout</a>
+</aside>
+
+<main>
+  <div class="head">
+    <div class="who"><h1 id="fname">{{ username }}</h1><p id="fdept">Loading profile...</p></div>
+    <div class="chips">
+      <div class="chip">Department<b id="cDept">-</b></div>
+      <div class="chip">Year<b id="cYear">-</b></div>
+    </div>
+  </div>
+
+  <div class="panel" id="pick" style="display:none">
+    <h2>Select your class</h2>
+    <div class="bar">
+      <div><label for="selY">Year</label><select id="selY"><option>I</option><option>II</option><option>III</option><option>IV</option></select></div>
+      <div><label for="selD">Department</label><select id="selD"></select></div>
+      <button class="btn" id="goPick">Open class</button>
+    </div>
+  </div>
+
+  <div id="body">
+  {% if page == 'manual' %}
+    <div class="panel">
+      <h2>Manual Attendance</h2>
+      <div class="bar">
+        <div><label for="date">Date</label><input type="date" id="date"></div>
+        <div><label for="period">Hour / Subject</label><select id="period" style="min-width:260px"></select></div>
+        <button class="btn alt" id="allP">Mark all present</button>
+      </div>
+      <div class="stats" style="margin-bottom:16px">
+        <div class="stat"><span>Total</span><b id="mT">0</b></div>
+        <div class="stat"><span>Present</span><b id="mP" style="color:var(--green)">0</b></div>
+        <div class="stat"><span>Absent</span><b id="mA" style="color:var(--red)">0</b></div>
+      </div>
+      <div class="wrapx"><table><thead><tr><th>Roll No</th><th>Student Name</th><th class="c">Status</th></tr></thead><tbody id="mRows"></tbody></table></div>
+      <div style="margin-top:16px"><button class="btn" id="save">Save Attendance</button></div>
+      <div class="msg" id="mMsg"></div>
+    </div>
+
+  {% elif page == 'report' %}
+    <div class="panel">
+      <h2>Attendance Report</h2>
+      <div class="bar">
+        <div><label for="month">Month</label><input type="month" id="month"></div>
+        <button class="btn" id="load">Show report</button>
+        <button class="btn alt" id="dl">Download CSV</button>
+      </div>
+      <div class="wrapx"><table><thead><tr><th>Roll No</th><th>Student Name</th><th class="c">Total Hours</th><th class="c">Absent Hours</th><th class="c">Attended Hours</th><th class="c">Percentage</th></tr></thead><tbody id="rRows"></tbody></table></div>
+    </div>
+
+  {% else %}
+    <div class="bar" style="margin-bottom:14px">
+      <div><label for="date">Date</label><input type="date" id="date"></div>
+    </div>
+    <div class="stats">
+      <div class="stat big"><span>Total Strength</span><b id="sT">0</b></div>
+      <div class="stat"><span>Hours</span><b id="sH">0</b></div>
+      <div class="stat"><span>Present (latest marked hour)</span><b id="sP" style="color:var(--green)">-</b></div>
+      <div class="stat"><span>Absent (latest marked hour)</span><b id="sA" style="color:var(--red)">-</b></div>
+    </div>
+    <div class="panel"><h2>Hour-wise attendance</h2><div class="hours" id="hours"></div><p class="note" id="hNote" style="display:none">No timetable hours found for this date.</p></div>
+    <div class="panel">
+      <h2>Student list</h2>
+      <div class="bar">
+        <div><label for="q">Search name or roll no</label><input id="q" placeholder="Search..."></div>
+        <label class="ck" style="margin:0"><input type="checkbox" id="onlyA"> Show only students absent in any hour</label>
+      </div>
+      <div class="wrapx"><table><thead id="mh"></thead><tbody id="mb"></tbody></table></div>
+    </div>
+  {% endif %}
+  </div>
+</main>
+
+<script>
+const PAGE="{{ page }}";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const get=async u=>(await fetch(u)).json();
+let CLS={year:'',department:''};
+
+async function init(){
+  const p=await get('/api/faculty_profile');
+  if(p.success){
+    $('fname').textContent=p.name||p.username;
+    CLS={year:p.year,department:p.department};
+  }
+  if(!CLS.year||!CLS.department){
+    $('fdept').textContent='Choose a class to continue';
+    $('pick').style.display='';
+    const d=await get('/api/departments');
+    $('selD').innerHTML=(d.departments||[]).map(x=>`<option>${esc(x)}</option>`).join('');
+    $('goPick').onclick=()=>{CLS={year:$('selY').value,department:$('selD').value};$('pick').style.display='none';start()};
+    return;
+  }
+  start();
+}
+function start(){
+  $('cDept').textContent=CLS.department;$('cYear').textContent=CLS.year;
+  $('fdept').textContent=`${CLS.department} Department - ${CLS.year} Year`;
+  ({home:home,hourly:home,manual:manual,report:report})[PAGE]();
+}
+const qs=o=>new URLSearchParams(o).toString();
+
+/* ---------- HOME ---------- */
+let DATA=null;
+async function home(){
+  $('date').value=today();$('date').onchange=loadHome;$('q').oninput=$('onlyA').onchange=drawList;
+  loadHome();
+}
+async function loadHome(){
+  DATA=await get('/api/period_attendance?'+qs({date:$('date').value,...CLS}));
+  if(!DATA.success){$('hNote').style.display='';$('hNote').textContent=DATA.message;return}
+  const P=DATA.periods;
+  $('sT').textContent=DATA.total_students;$('sH').textContent=P.length;
+  const marked=P.filter(x=>x.present+x.absent>0).pop();
+  $('sP').textContent=marked?marked.present:'-';$('sA').textContent=marked?marked.absent:'-';
+  $('hNote').style.display=P.length?'none':'';
+  const lab={ended:['Done','m'],ongoing:['Now','o'],upcoming:['Soon','m'],unknown:['','m']};
+  $('hours').innerHTML=P.map((x,i)=>`<div class="hour"><div class="t">Hour ${i+1}<span class="pill st ${lab[x.state][1]}">${lab[x.state][0]}</span></div>
+    <div class="s">${esc(x.time)} · ${esc(x.subject)}</div>
+    <div class="n"><span class="pill p">${x.present} Present</span><span class="pill a">${x.absent} Absent</span></div>
+    ${x.not_marked&&x.present+x.absent?`<div class="s" style="margin:8px 0 0">${x.not_marked} not marked</div>`:''}
+    ${x.present+x.absent===0?`<div class="s" style="margin:8px 0 0">Not marked yet</div>`:''}</div>`).join('');
+  drawList();
+}
+function drawList(){
+  if(!DATA||!DATA.success)return;
+  const P=DATA.periods;
+  $('mh').innerHTML=`<tr><th>Roll No</th><th>Student Name</th>${P.map((x,i)=>`<th class="c" title="${esc(x.time)} ${esc(x.subject)}">H${i+1}</th>`).join('')}<th class="c">Present</th></tr>`;
+  const map={};
+  (P[0]?.students||[]).forEach(s=>map[s.roll_no]={name:s.name,st:[]});
+  P.forEach(x=>x.students.forEach(s=>{(map[s.roll_no]||(map[s.roll_no]={name:s.name,st:[]})).st.push(s.status)}));
+  const q=$('q').value.trim().toLowerCase(),oa=$('onlyA').checked;
+  const rows=Object.entries(map).filter(([r,s])=>(!q||r.toLowerCase().includes(q)||s.name.toLowerCase().includes(q))&&(!oa||s.st.includes('Absent')));
+  const cell=t=>t==='Present'?'<span class="dot p">P</span>':t==='Absent'?'<span class="dot a">A</span>':'<span class="dot m">-</span>';
+  $('mb').innerHTML=rows.length?rows.map(([r,s])=>{const pc=s.st.filter(t=>t==='Present').length,mk=s.st.filter(t=>t!=='Not marked').length;
+    return `<tr><td>${esc(r)}</td><td>${esc(s.name)}</td>${s.st.map(t=>`<td class="c">${cell(t)}</td>`).join('')}<td class="c"><b>${pc}</b>/${mk}</td></tr>`}).join('')
+    :`<tr><td colspan="${P.length+3}" class="note">No students found.</td></tr>`;
+}
+
+/* ---------- MANUAL ---------- */
+let MD=null,ST={};
+async function manual(){
+  $('date').value=today();$('date').onchange=loadManual;$('period').onchange=drawManual;
+  $('allP').onclick=()=>{MD.students.forEach(s=>ST[s.roll_no]='Present');drawManual(true)};
+  $('save').onclick=saveManual;loadManual();
+}
+async function loadManual(){
+  $('mMsg').textContent='';
+  MD=await get('/api/period_attendance?'+qs({date:$('date').value,...CLS}));
+  if(!MD.success){$('period').innerHTML='';$('mRows').innerHTML=`<tr><td colspan="3" class="note">${esc(MD.message)}</td></tr>`;return}
+  MD.students=MD.periods[0]?.students||[];
+  $('period').innerHTML=MD.periods.length?MD.periods.map((x,i)=>`<option value="${i}">Hour ${i+1}: ${esc(x.time)} - ${esc(x.subject)}</option>`).join(''):'<option value="">No hours in timetable</option>';
+  drawManual();
+}
+function drawManual(keep){
+  const per=MD.periods[$('period').value];
+  if(!per){$('mRows').innerHTML='<tr><td colspan="3" class="note">No hours for this date.</td></tr>';count();return}
+  MD.students=per.students;
+  if(!keep){ST={};per.students.forEach(s=>ST[s.roll_no]=s.status==='Absent'?'Absent':'Present')}
+  $('mRows').innerHTML=per.students.map(s=>`<tr><td>${esc(s.roll_no)}</td><td>${esc(s.name)}</td><td class="c"><div class="tg" data-r="${esc(s.roll_no)}">
+    <button type="button" class="p ${ST[s.roll_no]==='Present'?'sel':''}" data-v="Present">Present</button>
+    <button type="button" class="a ${ST[s.roll_no]==='Absent'?'sel':''}" data-v="Absent">Absent</button></div></td></tr>`).join('');
+  $('mRows').querySelectorAll('.tg').forEach(g=>g.onclick=e=>{const b=e.target.closest('button');if(!b)return;
+    ST[g.dataset.r]=b.dataset.v;g.querySelectorAll('button').forEach(x=>x.classList.toggle('sel',x===b));count()});
+  count();
+}
+function count(){const v=Object.values(ST);$('mT').textContent=v.length;$('mP').textContent=v.filter(x=>x==='Present').length;$('mA').textContent=v.filter(x=>x==='Absent').length}
+async function saveManual(){
+  const per=MD&&MD.periods[$('period').value];const m=$('mMsg');
+  if(!per){m.className='msg bad';m.textContent='Select an hour first.';return}
+  const r=await fetch('/save_attendance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    date:$('date').value,year:CLS.year,department:CLS.department,period:per.time,subject:per.subject,
+    records:per.students.map(s=>({roll_no:s.roll_no,status:ST[s.roll_no]}))})});
+  const d=await r.json();m.className='msg '+(d.success?'ok':'bad');m.textContent=d.message||'Done';
+  if(d.success)loadManual().then(()=>{});
+}
+
+/* ---------- REPORT ---------- */
+let RR=[];
+function report(){
+  $('month').value=today().slice(0,7);$('load').onclick=loadReport;$('dl').onclick=dlCsv;loadReport();
+}
+async function loadReport(){
+  const d=await get('/api/admin_attendance_report?'+qs({...CLS,month:$('month').value}));
+  if(!d.success){$('rRows').innerHTML=`<tr><td colspan="6" class="note">${esc(d.message)}</td></tr>`;return}
+  RR=d.students.map(s=>{const t=+s.total_hours,p=+s.present_hours;return{roll:s.student_id,name:s.name,total:t,absent:t-p,att:p,pct:t?(p/t*100):0}});
+  $('rRows').innerHTML=RR.length?RR.map(s=>`<tr><td>${esc(s.roll)}</td><td>${esc(s.name)}</td><td class="c">${s.total}</td><td class="c">${s.absent}</td><td class="c">${s.att}</td>
+    <td class="c"><span class="pill ${s.pct>=75?'p':'a'}">${s.pct.toFixed(1)}%</span></td></tr>`).join(''):'<tr><td colspan="6" class="note">No students found.</td></tr>';
+}
+function dlCsv(){
+  const q=v=>`"${String(v).replace(/"/g,'""')}"`;
+  const lines=[['Roll No','Name','Total Hours','Absent Hours','Attended Hours','Percentage'].map(q).join(',')]
+    .concat(RR.map(s=>[s.roll,s.name,s.total,s.absent,s.att,s.pct.toFixed(1)+'%'].map(q).join(',')));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv'}));
+  a.download=`attendance_${CLS.department}_${CLS.year}_${$('month').value}.csv`;a.click();
+}
+init();
+</script>
+</body>
+</html>

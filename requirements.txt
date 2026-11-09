@@ -15,3 +15,4 @@ gunicorn
 psycopg2-binary
 python-dotenv
 opencv-contrib-python-headless
+requests

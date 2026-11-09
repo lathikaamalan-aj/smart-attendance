@@ -161,6 +161,7 @@ img,video{max-width:100%}
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></symbol>
   <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4M6.5 6.6C3.6 8.5 2 12 2 12s3.6 7 10 7c1.7 0 3.2-.4 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+  <symbol id="i-fac" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M14 8h4M14 12h4M8 20h8M12 16v4"/></symbol>
 </svg>
 
 <header class="topbar">
@@ -185,11 +186,15 @@ img,video{max-width:100%}
 <main class="container">
 
   <div class="group">
-    <div class="group-head"><h3>Students and timetable</h3><span>Records and schedules</span></div>
-    <div class="grid">
+    <div class="group-head"><h3>Students, faculty and timetable</h3><span>Records and schedules</span></div>
+    <div class="grid four">
       <button class="tile" style="--n:0" type="button" onclick="window.location.href='/upload_students'">
         <div class="tile-icon"><svg class="i"><use href="#i-add"/></svg></div>
         <div><h3>Add Students</h3><p>Add or upload student details into the attendance system.</p></div>
+      </button>
+      <button class="tile" style="--n:1" type="button" onclick="window.location.href='/add_faculty'">
+        <div class="tile-icon"><svg class="i"><use href="#i-fac"/></svg></div>
+        <div><h3>Add Faculty</h3><p>Upload faculty details from a CSV or Excel file and create their logins.</p></div>
       </button>
       <button class="tile" style="--n:1" type="button" onclick="window.location.href='/view_students'">
         <div class="tile-icon"><svg class="i"><use href="#i-users"/></svg></div>
